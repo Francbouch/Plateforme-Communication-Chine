@@ -107,3 +107,11 @@ Tant que ces vérifications distantes ne sont pas réalisées, l’intégration 
 ## Réseau de l’environnement cloud
 
 Pour automatiser depuis cet environnement, les accès Cloudflare/Vercel doivent être fournis par connexion sécurisée et les domaines réellement nécessaires autorisés (API Cloudflare, API Vercel, domaine d’équipe Access pour JWKS). Ne pas remplacer l’allowlist inconnue ni désactiver le proxy/TLS. L’absence d’un token Cloudflare a été confirmée par `wrangler whoami`, pas déduite seulement de variables absentes. Git HTTPS fonctionne ; l’API GitHub peut nécessiter `api.github.com` pour créer la PR.
+
+## Première base créée depuis le tableau de bord
+
+Le propriétaire a créé `forgebridge-db`, UUID `eeafdf4e-7d5d-4ea2-8d1c-7984b749ecf3` ; cette valeur non secrète est maintenant dans Wrangler. La capture initiale indiquait zéro table. Aucun accès distant de l’agent n’est établi et aucune migration distante n’est déclarée exécutée.
+
+Pour une **base encore vide uniquement**, `scripts/initialize-empty-d1.sql` permet une initialisation manuelle depuis Console : copier tout le fichier puis exécuter une seule fois. Ce baseline crée le schéma des migrations 0001/0002, sans compte/projet fictif, et enregistre les deux noms dans `d1_migrations` selon le format Wrangler. Les futures migrations CLI ne tenteront donc pas de recréer ces tables. Ne pas exécuter ce script sur une base déjà initialisée et ne pas le relancer après une erreur sans vérifier les tables existantes.
+
+Le binding R2 est retiré de la configuration par défaut tant que le bucket dédié n’existe pas : aucun écran actuel ne l’utilise. Après création autorisée, ajouter `r2_buckets: [{binding: 'DOCUMENTS', bucket_name: 'forgebridge-documents'}]`.
