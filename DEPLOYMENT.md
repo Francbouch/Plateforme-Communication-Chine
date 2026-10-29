@@ -115,3 +115,7 @@ Le propriétaire a créé `forgebridge-db`, UUID `eeafdf4e-7d5d-4ea2-8d1c-7984b7
 Pour une **base encore vide uniquement**, `scripts/initialize-empty-d1.sql` permet une initialisation manuelle depuis Console : copier tout le fichier puis exécuter une seule fois. Ce baseline crée le schéma des migrations 0001/0002, sans compte/projet fictif, et enregistre les deux noms dans `d1_migrations` selon le format Wrangler. Les futures migrations CLI ne tenteront donc pas de recréer ces tables. Ne pas exécuter ce script sur une base déjà initialisée et ne pas le relancer après une erreur sans vérifier les tables existantes.
 
 Le binding R2 est retiré de la configuration par défaut tant que le bucket dédié n’existe pas : aucun écran actuel ne l’utilise. Après création autorisée, ajouter `r2_buckets: [{binding: 'DOCUMENTS', bucket_name: 'forgebridge-documents'}]`.
+
+### Collage dans la console D1
+
+Le fichier `scripts/initialize-empty-d1.sql` est sans commentaires SQL pour supporter la console web qui peut regrouper les lignes du collage. Si elle affiche « No SQL statements detected », vérifier d’abord les tables avec `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY name;`. Appliquer le baseline uniquement si cette requête ne retourne aucune table applicative. Si des tables existent ou si une autre erreur apparaît, diagnostiquer avant de relancer ; ne supprimer aucune table.

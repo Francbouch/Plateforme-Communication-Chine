@@ -1,7 +1,3 @@
--- ForgeBridge: initialisation of an EMPTY dedicated D1 only (baseline migrations 0001 + 0002).
--- Contains no user data, credentials, DROP, DELETE or fake administrator.
--- Paste the whole script into Cloudflare D1 Console and execute once.
--- D1 applies each migration transactionally. No demo data and no hard-coded user.
 PRAGMA foreign_keys = ON;
 CREATE TABLE profiles (
  id TEXT PRIMARY KEY, email TEXT CHECK(email IS NULL OR length(email) BETWEEN 3 AND 320), name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 120),
@@ -96,7 +92,6 @@ CREATE INDEX projects_recent ON projects(organization_id,updated_at DESC);
 CREATE INDEX invitations_recent ON invitations(organization_id,created_at DESC);
 CREATE INDEX audit_recent ON audit_events(organization_id,created_at DESC);
 CREATE INDEX outbox_pending ON outbox(created_at) WHERE delivered_at IS NULL;
-
 CREATE UNIQUE INDEX profiles_verified_email ON profiles(email) WHERE email IS NOT NULL;
 CREATE TABLE IF NOT EXISTS d1_migrations (
  id INTEGER PRIMARY KEY AUTOINCREMENT,
