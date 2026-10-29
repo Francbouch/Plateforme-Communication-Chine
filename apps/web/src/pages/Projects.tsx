@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
-import { api } from "../client";
+import { api, ApiError } from "../client";
 import type { Project } from "../types";
 import { Collaborators } from "./Collaborators";
 import { useTranslation } from "react-i18next";
@@ -9,9 +9,13 @@ import { Field } from "../components/Field";
 export function Projects({
   projects,
   org,
+  loading = false,
+  error = false,
 }: {
   projects: Project[];
   org: string;
+  loading?: boolean;
+  error?: boolean;
 }) {
   const { t } = useTranslation();
   const client = useQueryClient();
@@ -32,8 +36,12 @@ export function Projects({
       await client.invalidateQueries({ queryKey: ["projects", org] });
       setEditing(undefined);
       setMessage(t("success"));
-    } catch {
-      setMessage(t("error"));
+    } catch (e) {
+      setMessage(
+        e instanceof ApiError
+          ? `${t("error")} (${e.status}): ${e.message}`
+          : t("error"),
+      );
     } finally {
       setBusy(false);
     }
@@ -108,6 +116,8 @@ export function Projects({
           </form>
         </section>
       )}
+      {loading && <p role="status">{t("loading")}</p>}
+      {error && <p role="alert">{t("error")}</p>}
       <section className="panel table-wrap">
         <table>
           <thead>
@@ -142,7 +152,9 @@ export function Projects({
             ))}
           </tbody>
         </table>
-        {!projects.length && <p className="empty">{t("empty")}</p>}
+        {!loading && !error && !projects.length && (
+          <p className="empty">{t("empty")}</p>
+        )}
       </section>
       {selected && <Collaborators project={selected} org={org} />}
     </>

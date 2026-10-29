@@ -1,36 +1,34 @@
-import { createClient } from "@supabase/supabase-js";
-const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
-export const auth =
-  url && key
-    ? createClient(url, key, {
-        auth: {
-          flowType: "pkce",
-          persistSession: true,
-          autoRefreshToken: true,
-        },
-      })
-    : null;
-const apiBaseUrl =
-  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(
-    /\/+$/,
-    "",
-  ) ?? "";
-
+export class ApiError extends Error {
+  constructor(
+    public status: number,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+/** Same-origin Access gateway. The browser never holds an application secret. */
 export async function api<T>(
   path: string,
   body?: unknown,
   method?: string,
 ): Promise<T> {
-  const session = await auth?.auth.getSession();
-  const response = await fetch(`${apiBaseUrl}/api/v1/${path}`, {
+  const response = await fetch(`/api/v1/${path}`, {
     method: method ?? (body ? "POST" : "GET"),
-    headers: {
-      Authorization: `Bearer ${session?.data.session?.access_token ?? ""}`,
-      ...(body ? { "Content-Type": "application/json" } : {}),
-    },
+    credentials: "same-origin",
+    headers: body ? { "Content-Type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined,
   });
-  if (!response.ok) throw new Error(`Request rejected (${response.status})`);
-  return response.json() as Promise<T>;
+  if (!response.headers.get("Content-Type")?.includes("application/json"))
+    throw new ApiError(
+      response.status,
+      "Private gateway unavailable or Access session expired",
+    );
+  const result = await response.json();
+  if (!response.ok)
+    throw new ApiError(
+      response.status,
+      (result as { error?: string }).error ??
+        `Request rejected (${response.status})`,
+    );
+  return result as T;
 }
