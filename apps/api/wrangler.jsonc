@@ -10,11 +10,9 @@
     {
       "binding": "DB",
       "database_name": "forgebridge-db",
+      "database_id": "eeafdf4e-7d5d-4ea2-8d1c-7984b749ecf3",
       "migrations_dir": "migrations",
     },
-  ],
-  "r2_buckets": [
-    { "binding": "DOCUMENTS", "bucket_name": "forgebridge-documents" },
   ],
   "ratelimits": [
     {
@@ -23,5 +21,6 @@
       "simple": { "limit": 60, "period": 60 },
     },
   ],
-  // No remote database ID or route is invented. See DEPLOYMENT.md before publishing.
+  // D1 ID supplied by the owner. Add the optional DOCUMENTS R2 binding only after its dedicated bucket exists.
+  // No public route is configured. See DEPLOYMENT.md before publishing.
 }
