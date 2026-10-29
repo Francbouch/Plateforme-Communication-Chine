@@ -56,3 +56,7 @@ npm run supabase:stop
 ```
 
 Le démarrage applique les migrations sur cette base locale et utilise une boîte SMTP locale : aucun courriel ne quitte l’environnement. Les services inutiles (Studio, Realtime, stockage Supabase, fonctions Edge et analytics) sont exclus. **Démarrage non validé ici** : le registre officiel `public.ecr.aws` est refusé par la politique réseau. L’ajout de ce domaine a été enregistré dans le brouillon de l’environnement pour révision, sans application au runtime. Enregistrer ce changement dans les paramètres, puis relancer et diagnostiquer d’éventuelles destinations de téléchargement supplémentaires, sans contourner le proxy.
+
+## Frontend hébergé sur Vercel
+
+La procédure spécifique au monorepo est dans [VERCEL.md](VERCEL.md). Pour cette variante, `VITE_API_BASE_URL` pointe directement vers l’origine HTTPS du Worker et son CORS n’autorise que `APP_ORIGIN`. La variante Vercel ne requiert donc pas le routage sous une origine unique décrit plus haut. Le frontend et le Worker restent deux déploiements distincts, soumis à autorisation.

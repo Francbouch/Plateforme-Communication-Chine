@@ -17,7 +17,8 @@
     "test:browser": "playwright test",
     "format": "prettier --write .",
     "supabase:start": "supabase start --exclude realtime,storage-api,imgproxy,postgres-meta,studio,edge-runtime,logflare,vector,supavisor",
-    "supabase:stop": "supabase stop"
+    "supabase:stop": "supabase stop",
+    "test:preview": "playwright test --config playwright.preview.config.ts"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261023.1",

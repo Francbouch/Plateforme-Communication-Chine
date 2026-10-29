@@ -11,13 +11,19 @@ export const auth =
         },
       })
     : null;
+const apiBaseUrl =
+  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(
+    /\/+$/,
+    "",
+  ) ?? "";
+
 export async function api<T>(
   path: string,
   body?: unknown,
   method?: string,
 ): Promise<T> {
   const session = await auth?.auth.getSession();
-  const response = await fetch(`/api/v1/${path}`, {
+  const response = await fetch(`${apiBaseUrl}/api/v1/${path}`, {
     method: method ?? (body ? "POST" : "GET"),
     headers: {
       Authorization: `Bearer ${session?.data.session?.access_token ?? ""}`,
