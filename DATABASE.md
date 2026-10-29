@@ -1,16 +1,18 @@
-# Base de données
+# Base de données D1 / SQLite
 
-## Tables actives
+## Schéma actif
 
-`profiles` référence `auth.users` (UUID, nom, langue, fuseau, statut, création). Le trigger Auth ne crée aucun droit métier. `organizations` possède les projets. `organization_memberships` lie compte et organisation, rôle et activation. `suppliers` contient les coordonnées ; `supplier_notes` isole les notes internes accessibles aux seuls propriétaires MFA. `supplier_memberships` contient l’appartenance active et un champ de délégation réservé (non activé en phase 1).
+`apps/api/migrations/0001_d1_foundations.sql` crée les 12 tables métier de la phase 1 : profiles, organizations, organization_memberships, suppliers, supplier_notes, supplier_memberships, projects, project_suppliers, project_memberships, invitations, audit_events et outbox. `identity_links` est ajoutée pour dissocier l’identité Access du compte interne. `0002_profile_email.sql` ajoute le courriel vérifié du profil et son index unique, sans fabriquer d’adresse pour des lignes historiques.
 
-`projects` possède code unique dans l’organisation, nom, description, statut, dates. `project_suppliers` autorise explicitement une entreprise sur un projet. `project_memberships` autorise un compte sur un projet, avec rôle et fournisseur éventuel. Les clés étrangères composites interdisent de lier différentes organisations. Un rôle fournisseur exige un fournisseur ; les autres rôles n’en acceptent pas.
+Les UUID deviennent TEXT générés par le Worker, pas des entiers auto-incrémentés. Rôles/états/langues sont des CHECK ; booléens INTEGER 0/1 ; dates ISO UTC par strftime ; payload outbox JSON validé. Les clés étrangères composites empêchent les associations inter-organisations, les codes projet sont uniques par organisation, les pages futures restent hors migration. Les index couvrent les utilisateurs/appartenances, projets récents, invitations, audit et outbox non livrée. Les triggers interdisent UPDATE/DELETE des événements d’audit.
 
-`invitations` contient courriel, projet, fournisseur éventuel, rôle, empreinte SHA-256, auteur, expiration et dates d’acceptation/révocation. Le jeton aléatoire possède deux UUID ; seul son hash est conservé. Acceptation verrouillée `FOR UPDATE`, vérification du courriel confirmé, délai et usage unique ; appartenance et audit sont transactionnels. Une invitation ne réactive ni ne remplace silencieusement un accès existant révoqué : le responsable doit gérer cet accès explicitement.
+Il n’existe ni auth.users, ni enum PostgreSQL, ni fonction/RPC, ni RLS. Les gardes SQL paramétrées du Store reproduisent les contrôles nécessaires ; D1 reste accessible uniquement au Worker. Les mutations, notes, audit et outbox sont groupés par D1.batch : un échec de contrainte ou d’audit annule le lot. Les gardes sont incluses dans les statements pour éviter un contrôle d’autorisation uniquement préalable à la transaction.
 
-`audit_events` est append-only pour les utilisateurs ; `outbox` n’est pas lisible par les clients. Index sur appartenances par utilisateur, projets par organisation/date, invitations, audit et événements non livrés.
+`npm run db:migrate` applique seulement les migrations locales. Elles sont suivies par Wrangler et réapplicables sans réinitialiser les données. Aucune donnée de démonstration. Le profil initial et son identity_link ne sont créés qu’après une vraie identité Access validée correspondant à ADMIN_EMAIL et ADMIN_USER_ID. L’organisation est créée explicitement par l’utilisateur dans l’interface.
 
-Les RPC sont les seuls chemins d’écriture autorisés. Les droits EXECUTE implicites de PUBLIC sont révoqués. Les fonctions SECURITY DEFINER ont un `search_path` vide et des noms de tables qualifiés. Les scripts de test Auth ne doivent **jamais** être appliqués à Supabase réel.
+Les invitations conservent destinataire, projet, fournisseur, rôle, hash du jeton, expiration, acceptation et révocation. La génération et révocation fonctionnent ; **l’acceptation est désactivée** jusqu’à l’ajout des comptes fournisseurs. Ne pas présenter un jeton préparatoire comme un accès actif.
+
+Aucune extraction ni suppression d’une base distante antérieure n’a eu lieu. Si des données réelles existent, préparer un export en lecture seule, une conversion contrôlée et un import dans une nouvelle D1 de test, vérifier toutes les relations/hashes et lier explicitement les anciennes identités. Ne pas importer automatiquement auth.users ou des secrets. Les migrations historiques sont dans Git, et non dans la chaîne active D1.
 
 ## Modèle documentaire prévu — phase 2, non migré
 
@@ -24,8 +26,8 @@ Les RPC sont les seuls chemins d’écriture autorisés. Les droits EXECUTE impl
 | DocumentAnnotation | UUID, page/révision avec FK composite, auteur, type, géométrie normalisée dans [0,1], contenu/langue originale, état/date                                       |
 | DocumentChange     | UUID, anciennes/nouvelles révisions même document, pages logiques affectées, type, auteur/date, résumé, annotations associées                                   |
 
-La position d’une page n’est jamais son identité. Les révisions et actifs publiés sont conservés et interdits de UPDATE/DELETE par trigger, y compris leurs pages et références. Une substitution crée un nouveau brouillon, partage les actifs inchangés et attribue de nouveaux identifiants de page de révision en conservant les identifiants logiques.
+La position d’une page n’est jamais son identité. Les révisions et actifs publiés sont conservés et interdits de UPDATE/DELETE par des contraintes/triggers à implémenter, y compris leurs pages et références. Une substitution crée un nouveau brouillon, partage les actifs inchangés et attribue de nouveaux identifiants de page de révision en conservant les identifiants logiques.
 
-Publication : verrouiller le document, vérifier le brouillon et l’état clean de tous les actifs, assembler/valider hors transaction, puis dans **une transaction** figer le manifeste/pages/métadonnées/hash, publier la révision, avancer current_revision_id, écrire audit et outbox. Un objet R2 immuable existe avant commit ; une transaction SQL ne peut pas rendre R2 transactionnel. Un collecteur séparé traite les objets orphelins après délai et vérifie les références avant suppression. Une révision publiée ne doit jamais être écrasée.
+Publication : verrouiller le document, vérifier le brouillon et l’état clean de tous les actifs, assembler/valider hors transaction, puis dans **un lot D1 transactionnel** figer le manifeste/pages/métadonnées/hash, publier la révision, avancer current_revision_id, écrire audit et outbox. Un objet R2 immuable existe avant commit ; une transaction SQL ne peut pas rendre R2 transactionnel. Un collecteur séparé traite les objets orphelins après délai et vérifie les références avant suppression. Une révision publiée ne doit jamais être écrasée.
 
 Les annotations restent attachées à leur page et révision d’origine. Une projection vers une nouvelle révision est explicite et traçable, jamais un déplacement silencieux.
