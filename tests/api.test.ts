@@ -168,3 +168,46 @@ describe("shared validation", () => {
       }).success,
     ).toBe(false));
 });
+
+describe("Vercel cross-origin integration", () => {
+  it("accepts preflight from the exact configured frontend without requiring authentication", async () => {
+    const r = await app.request(
+      "/api/v1/projects",
+      {
+        method: "OPTIONS",
+        headers: {
+          Origin: env.APP_ORIGIN,
+          "Access-Control-Request-Method": "POST",
+          "Access-Control-Request-Headers": "authorization,content-type",
+        },
+      },
+      env,
+    );
+    expect(r.status).toBe(204);
+    expect(r.headers.get("Access-Control-Allow-Origin")).toBe(env.APP_ORIGIN);
+    expect(
+      r.headers.get("Access-Control-Allow-Headers")?.toLowerCase(),
+    ).toContain("authorization");
+    expect(r.headers.get("Access-Control-Allow-Credentials")).toBeNull();
+    expect(mock.getUser).not.toHaveBeenCalled();
+  });
+  it("does not grant CORS to an unrelated preview domain", async () => {
+    const r = await app.request(
+      "/api/v1/projects",
+      {
+        method: "OPTIONS",
+        headers: {
+          Origin: "https://untrusted-preview.vercel.app",
+          "Access-Control-Request-Method": "POST",
+        },
+      },
+      env,
+    );
+    expect(r.headers.get("Access-Control-Allow-Origin")).toBeNull();
+  });
+  it("allows the browser to read authenticated API errors from its configured origin", async () => {
+    const r = await req("projects", undefined, { Authorization: "" });
+    expect(r.status).toBe(401);
+    expect(r.headers.get("Access-Control-Allow-Origin")).toBe(env.APP_ORIGIN);
+  });
+});

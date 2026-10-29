@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 import { bodyLimit } from "hono/body-limit";
 import { secureHeaders } from "hono/secure-headers";
 import {
@@ -26,6 +27,17 @@ export type Bindings = {
 type Variables = { db: SupabaseClient; user: User; requestId: string };
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 app.use("*", secureHeaders());
+// Vercel frontend -> Workers: exact origin, Bearer auth, no ambient cookies.
+app.use("/api/v1/*", (c, next) =>
+  cors({
+    origin: (origin) => (origin === c.env.APP_ORIGIN ? origin : undefined),
+    allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allowHeaders: ["Authorization", "Content-Type"],
+    exposeHeaders: ["X-Request-ID"],
+    credentials: false,
+    maxAge: 600,
+  })(c, next),
+);
 app.use(
   "/api/v1/*",
   bodyLimit({

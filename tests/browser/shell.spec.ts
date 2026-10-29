@@ -32,3 +32,21 @@ test("mobile shell has no horizontal document overflow", async ({ page }) => {
     ),
   ).toBe(true);
 });
+
+test("SPA entry points load directly and expose real JavaScript assets", async ({
+  page,
+}) => {
+  for (const route of ["/", "/projects", "/admin", "/documents"]) {
+    const response = await page.goto(route);
+    expect(response?.status()).toBe(200);
+    await expect(
+      page.getByRole("heading", { name: "Configuration Supabase requise" }),
+    ).toBeVisible();
+  }
+  const script = page.locator('script[type="module"]').first();
+  const src = await script.getAttribute("src");
+  expect(src).toBeTruthy();
+  const asset = await page.request.get(src!);
+  expect(asset.ok()).toBe(true);
+  expect(asset.headers()["content-type"]).toMatch(/javascript/);
+});

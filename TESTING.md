@@ -4,7 +4,7 @@
 
 | Vérification                        | Résultat         | Portée                                                                                                                              |
 | ----------------------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `npm ci --no-audit --no-fund`       | Réussi           | Réinstallation finale depuis le lockfile, CLI Supabase inclus                               |
+| `npm ci --no-audit --no-fund`       | Réussi           | Réinstallation finale depuis le lockfile, CLI Supabase inclus                                                                       |
 | `npm run typecheck`                 | Réussi           | TypeScript strict frontend/API/contrats/tests                                                                                       |
 | `npm run lint`                      | Réussi           | ESLint TypeScript                                                                                                                   |
 | `npm test`                          | 16 tests réussis | 15 tests API/validation, 1 parité des dictionnaires fr-CA/en/zh-CN                                                                  |
@@ -41,3 +41,16 @@ Le test navigateur doit être lancé sans variables VITE Supabase pour vérifier
 Autoriser le registre officiel pour `npm run supabase:start`, ou configurer un nouveau Supabase dédié selon DEPLOYMENT.md. Vérifier inscription, confirmation du courriel, connexion, enrôlement/challenge MFA, création d’organisation/projet/fournisseur, association, invitation et acceptation avec un autre compte. Refaire les accès croisés via API et PostgREST avec de vrais JWT ; tester révocation de droits et sessions, protection Auth brute-force et langues sauvegardées par compte.
 
 Les critères d’acceptation liés à la connexion réelle et aux opérations navigateur authentifiées restent **non validés**. La phase 1 ne doit pas être annoncée entièrement acceptée avant ces contrôles.
+
+## Préparation Vercel
+
+Le frontend est dans `apps/web`, installé depuis le workspace racine et compilé vers `apps/web/dist`. `vercel.json` configure ce build et le repli SPA. Une configuration Playwright distincte teste les fichiers **compilés** via `vite preview`, sans réutiliser le serveur de développement :
+
+```sh
+npm run build -w @forgebridge/web
+PLAYWRIGHT_CHROMIUM_EXECUTABLE=/usr/bin/chromium npm run test:preview
+```
+
+Résultats : build, types et lint réussis ; **21 tests unitaires/API** (dont CORS exact et routage du client vers le Worker) et **3 tests navigateur du bundle compilé** réussis. Les accès directs `/`, `/projects`, `/admin`, `/documents`, les assets JavaScript, les langues, le thème et la largeur mobile sont vérifiés. Les tests de rendu utilisent l’état sans Supabase, pas une session métier simulée. Le CORS accepte le prévol depuis APP_ORIGIN, ne l’accorde pas à un domaine tiers et conserve les erreurs d’authentification lisibles par le frontend autorisé.
+
+Ces contrôles ne constituent pas une exécution sur l’infrastructure Vercel : la réécriture distante devra être confirmée après le déploiement autorisé. Aucun backend cloud, compte Supabase réel ni URL Vercel n’est créé par ces tests. Aucune modification de migration SQL n’a été nécessaire.

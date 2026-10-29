@@ -41,3 +41,7 @@ Lire [ARCHITECTURE.md](ARCHITECTURE.md), [DATABASE.md](DATABASE.md), [PERMISSION
 ## Limites actuelles
 
 La gestion documentaire, les annotations, la messagerie et les notifications restent explicitement indisponibles. Aucun endpoint de fichier n’existe. Le succès des tests SQL locaux ne valide pas le service Supabase Auth, son SMTP ou une configuration de production. Les listes sont plafonnées à 200 entrées ; une pagination sera nécessaire avant une utilisation à grande échelle. Voir les résultats effectivement exécutés dans TESTING.md.
+
+## Afficher le frontend sur Vercel
+
+Voir [VERCEL.md](VERCEL.md) : racine du dépôt `./`, build `npm run build -w @forgebridge/web`, sortie `apps/web/dist`, réécriture SPA dans `vercel.json`. Aucun déploiement n’est automatisé. Le frontend peut afficher son écran de configuration sans service externe ; les fonctionnalités authentifiées nécessitent Supabase et le Worker dédié.
