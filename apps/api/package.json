@@ -1,0 +1,14 @@
+{
+  "name": "@forgebridge/api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --ip 0.0.0.0 --port 8787",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "hono": "^4.10.6",
+    "zod": "^4.1.13",
+    "@supabase/supabase-js": "^2.86.0"
+  }
+}
