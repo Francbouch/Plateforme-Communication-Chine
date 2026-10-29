@@ -13,12 +13,13 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
-    "test:db": "bash scripts/test-db.sh",
+    "test:db": "vitest run tests/d1-api.test.ts",
     "test:browser": "playwright test",
     "format": "prettier --write .",
-    "supabase:start": "supabase start --exclude realtime,storage-api,imgproxy,postgres-meta,studio,edge-runtime,logflare,vector,supavisor",
-    "supabase:stop": "supabase stop",
-    "test:preview": "playwright test --config playwright.preview.config.ts"
+    "test:preview": "playwright test --config playwright.preview.config.ts",
+    "db:migrate": "npm run db:migrate -w @forgebridge/api",
+    "build:worker": "npm run build -w @forgebridge/api",
+    "test:private": "playwright test --config playwright.private.config.ts"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261023.1",
@@ -29,12 +30,16 @@
     "concurrently": "^9.2.1",
     "eslint": "^9.39.0",
     "eslint-plugin-react-hooks": "^7.0.1",
+    "miniflare": "^5.20261023.2-beta",
     "prettier": "^3.9.10",
-    "supabase": "^2.122.0",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.48.0",
     "vite": "^7.3.0",
+    "vite-node": "^3.2.4",
     "vitest": "^3.2.4",
     "wrangler": "^4.50.0"
+  },
+  "dependencies": {
+    "@vercel/functions": "^3.10.5"
   }
 }

@@ -16,16 +16,13 @@ import {
   Settings,
   Globe,
   Sun,
-  LogOut,
   LockKeyhole,
   Wrench,
 } from "lucide-react";
-import type { Session } from "@supabase/supabase-js";
-import { auth, api } from "./client";
+import { api } from "./client";
 import { qc } from "./query";
 import type { Account, Project } from "./types";
 import { Field } from "./components/Field";
-import { Login } from "./pages/Login";
 import { Dashboard } from "./pages/Dashboard";
 import { Projects } from "./pages/Projects";
 import { Admin } from "./pages/Admin";
@@ -33,43 +30,48 @@ import "./i18n";
 import "./style.css";
 function App() {
   const { t, i18n } = useTranslation();
-  const [session, setSession] = useState<Session | null>(null);
-  const [initial, setInitial] = useState(true);
   const [dark, setDark] = useState(
     localStorage.getItem("forgebridge.theme") === "dark",
   );
   const [org, setOrg] = useState("");
+  const [languageError, setLanguageError] = useState(false);
   useEffect(() => {
     document.documentElement.dataset.theme = dark ? "dark" : "light";
     localStorage.setItem("forgebridge.theme", dark ? "dark" : "light");
   }, [dark]);
-  useEffect(() => {
-    if (!auth) {
-      setInitial(false);
-      return;
-    }
-    void auth.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setInitial(false);
-    });
-    const { data } = auth.auth.onAuthStateChange((_event, s) => {
-      setSession(s);
-      qc.clear();
-    });
-    return () => data.subscription.unsubscribe();
-  }, []);
   const account = useQuery({
-    queryKey: ["me", session?.user.id],
+    queryKey: ["me"],
     queryFn: () => api<Account>("me"),
-    enabled: !!session,
   });
   useEffect(() => {
     if (account.data) {
-      void i18n.changeLanguage(account.data.profile.language);
       if (!account.data.organizations.some((o) => o.id === org))
         setOrg(account.data.organizations[0]?.id ?? "");
     }
-  }, [account.data, i18n, org]);
+  }, [account.data, org]);
+  const preferredLanguage = account.data?.profile.language;
+  useEffect(() => {
+    if (preferredLanguage) void i18n.changeLanguage(preferredLanguage);
+  }, [preferredLanguage]);
+  async function updateLanguage(language: string) {
+    try {
+      if (account.data)
+        await api(
+          "me",
+          {
+            name: account.data.profile.name,
+            timezone: account.data.profile.timezone,
+            language,
+          },
+          "PATCH",
+        );
+      await i18n.changeLanguage(language);
+      setLanguageError(false);
+      if (account.data) await qc.invalidateQueries({ queryKey: ["me"] });
+    } catch {
+      setLanguageError(true);
+    }
+  }
   const projects = useQuery({
     queryKey: ["projects", org],
     queryFn: () => api<Project[]>(`projects?organization_id=${org}`),
@@ -121,15 +123,6 @@ function App() {
               <strong>{account.data?.profile.name || "ForgeBridge"}</strong>
               <small>{t("security")}</small>
             </div>
-            {session && (
-              <button
-                className="icon"
-                aria-label={t("logout")}
-                onClick={() => void auth?.auth.signOut()}
-              >
-                <LogOut size={17} />
-              </button>
-            )}
           </div>
         </aside>
         <div className="main">
@@ -140,7 +133,7 @@ function App() {
               <select
                 aria-label={t("language")}
                 value={i18n.language}
-                onChange={(e) => void i18n.changeLanguage(e.target.value)}
+                onChange={(e) => void updateLanguage(e.target.value)}
               >
                 <option value="fr-CA">Français</option>
                 <option value="en">English</option>
@@ -156,18 +149,16 @@ function App() {
             </div>
           </header>
           <main>
-            {!auth ? (
-              <section className="notice">
+            {languageError && <p role="alert">{t("error")}</p>}
+            {account.isError ? (
+              <section className="notice" role="alert">
                 <LockKeyhole />
-                <h1>{t("unconfigured")}</h1>
-                <p>{t("configHelp")}</p>
+                <h1>{t("privateAccessRequired")}</h1>
+                <p>{t("privateAccessHelp")}</p>
+                <button onClick={() => window.location.reload()}>
+                  {t("retry")}
+                </button>
               </section>
-            ) : initial ? (
-              <p role="status">{t("loading")}</p>
-            ) : !session ? (
-              <Login />
-            ) : account.isError ? (
-              <p role="alert">{t("error")}</p>
             ) : account.isPending ? (
               <p role="status">{t("loading")}</p>
             ) : (
@@ -203,7 +194,12 @@ function App() {
                   <Route
                     path="/projects"
                     element={
-                      <Projects projects={projects.data ?? []} org={org} />
+                      <Projects
+                        projects={projects.data ?? []}
+                        org={org}
+                        loading={projects.isPending && !!org}
+                        error={projects.isError}
+                      />
                     }
                   />
                   <Route

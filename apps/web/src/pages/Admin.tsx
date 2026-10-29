@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "../client";
+import { api, ApiError } from "../client";
 import {
   roles,
   type Project,
@@ -8,7 +8,6 @@ import {
   type Supplier,
   type Invite,
 } from "../types";
-import { Mfa } from "../components/Mfa";
 import { useTranslation } from "react-i18next";
 import { Field } from "../components/Field";
 export function Admin({
@@ -48,8 +47,12 @@ export function Admin({
       await fn();
       setMessage(t("success"));
       await client.invalidateQueries();
-    } catch {
-      setMessage(t("error"));
+    } catch (e) {
+      setMessage(
+        e instanceof ApiError
+          ? `${t("error")} (${e.status}): ${e.message}`
+          : t("error"),
+      );
     }
   }
   return (
@@ -64,7 +67,7 @@ export function Admin({
       <p role="status">{message}</p>
       <section className="panel">
         <h2>{t("createOrganization")}</h2>
-        <p>{t("organizationMfa")}</p>
+        <p>{t("privateMode")}</p>
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -116,33 +119,11 @@ export function Admin({
             <button>{t("save")}</button>
           </form>
         </section>
-        <Mfa />
+        <section className="panel">
+          <h2>{t("privateDeveloper")}</h2>
+          <p>{t("privateMode")}</p>
+        </section>
       </div>
-      <section className="panel">
-        <h2>{t("accept")}</h2>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            const form = e.currentTarget;
-            const value = String(new FormData(form).get("token"));
-            void run(async () => {
-              await api("invitations/accept", { token: value });
-              form.reset();
-            });
-          }}
-        >
-          <Field name="token">
-            <input
-              name="token"
-              required
-              minLength={60}
-              maxLength={100}
-              autoComplete="off"
-            />
-          </Field>
-          <button>{t("accept")}</button>
-        </form>
-      </section>
       {org && (
         <>
           <section className="panel">
@@ -281,6 +262,7 @@ export function Admin({
           </section>
           <section className="panel">
             <h2>{t("invitations")}</h2>
+            <p>{t("supplierAccountsDisabled")}</p>
             <form
               onSubmit={(e) => {
                 e.preventDefault();

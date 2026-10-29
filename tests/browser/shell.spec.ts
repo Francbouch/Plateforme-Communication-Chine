@@ -4,13 +4,13 @@ test("configuration state, language switching and persistent theme", async ({
 }) => {
   await page.goto("/");
   await expect(
-    page.getByRole("heading", { name: "Configuration Supabase requise" }),
+    page.getByRole("heading", { name: "Accès privé requis" }),
   ).toBeVisible();
   await page
     .getByRole("combobox", { name: "Langue", exact: true })
     .selectOption("en");
   await expect(
-    page.getByRole("heading", { name: "Supabase configuration required" }),
+    page.getByRole("heading", { name: "Private access required" }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Toggle theme" }).click();
   await page.reload();
@@ -20,7 +20,7 @@ test("configuration state, language switching and persistent theme", async ({
     .getByRole("combobox", { name: "Language", exact: true })
     .selectOption("zh-CN");
   await expect(
-    page.getByRole("heading", { name: "需要配置 Supabase" }),
+    page.getByRole("heading", { name: "需要私有访问权限" }),
   ).toBeVisible();
 });
 test("mobile shell has no horizontal document overflow", async ({ page }) => {
@@ -40,7 +40,7 @@ test("SPA entry points load directly and expose real JavaScript assets", async (
     const response = await page.goto(route);
     expect(response?.status()).toBe(200);
     await expect(
-      page.getByRole("heading", { name: "Configuration Supabase requise" }),
+      page.getByRole("heading", { name: "Accès privé requis" }),
     ).toBeVisible();
   }
   const script = page.locator('script[type="module"]').first();
