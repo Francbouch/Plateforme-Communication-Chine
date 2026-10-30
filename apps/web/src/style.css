@@ -1228,3 +1228,79 @@ label.button:focus-within {
   overflow: hidden;
   clip-path: inset(50%);
 }
+
+/* Internal revision approvals; no global header/aside overrides. */
+.approval-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin: 20px 0;
+}
+.approval-summary button {
+  display: flex;
+  flex-direction: column;
+  padding: 18px;
+  align-items: flex-start;
+  text-align: left;
+}
+.approval-summary strong {
+  font-size: 26px;
+  color: var(--accent);
+}
+.approval-summary span {
+  font-size: 12px;
+  color: var(--muted);
+}
+.approval-dialog {
+  width: min(800px, 100%);
+}
+.approval-detail {
+  margin-top: 20px;
+}
+.approval-metadata {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 16px;
+}
+.approval-metadata dt {
+  font-size: 12px;
+  color: var(--muted);
+}
+.approval-metadata dd {
+  margin: 5px 0;
+}
+.approval-event {
+  border-left: 3px solid var(--line);
+  padding: 12px 18px;
+  margin: 10px 0;
+}
+.approval-event small,
+.approval-purpose-label {
+  display: block;
+  color: var(--muted);
+  margin: 6px 0;
+}
+.revision-approval-state {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+  background: var(--soft);
+}
+.revision-approval-state small {
+  display: block;
+  margin: 10px 0;
+}
+.message-approvals {
+  border-top: 1px solid var(--line);
+  margin-top: 12px;
+  padding-top: 10px;
+}
+.message-approvals summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+}
+.approval-action {
+  margin-top: 15px;
+}

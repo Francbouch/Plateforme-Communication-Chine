@@ -28,6 +28,9 @@ import { Dashboard } from "./pages/Dashboard";
 const Documents = lazy(() =>
   import("./pages/Documents").then((module) => ({ default: module.Documents })),
 );
+const Approvals = lazy(() =>
+  import("./pages/Approvals").then((m) => ({ default: m.Approvals })),
+);
 const Messages = lazy(() =>
   import("./pages/Messages").then((m) => ({ default: m.Messages })),
 );
@@ -135,6 +138,7 @@ function App() {
                   "documents",
                   "messages",
                   "requests",
+                  "approvals",
                 ].includes(key) && <span className="dot" title={t("soon")} />}
               </NavLink>
             ))}
@@ -273,6 +277,19 @@ function App() {
                       }
                     />
                   ))}
+                  {["/approvals", "/projects/:project/approvals"].map(
+                    (path) => (
+                      <Route
+                        key={path}
+                        path={path}
+                        element={
+                          <Suspense fallback={<p>{t("loading")}</p>}>
+                            <Approvals projects={projects.data ?? []} />
+                          </Suspense>
+                        }
+                      />
+                    ),
+                  )}
                   <Route
                     path="/admin"
                     element={
@@ -293,6 +310,7 @@ function App() {
                           "documents",
                           "messages",
                           "requests",
+                          "approvals",
                         ].includes(k),
                     )
                     .map(([key]) => (

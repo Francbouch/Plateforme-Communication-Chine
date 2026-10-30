@@ -14,16 +14,20 @@ export function ReferencePicker({
   project,
   onAdd,
   onClose,
+  initialDocument = "",
+  initialRevision = "",
 }: {
   project: string;
+  initialDocument?: string;
+  initialRevision?: string;
   onAdd: (r: MessageReference) => void;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
   const [query, setQuery] = useState(""),
     [offset, setOffset] = useState(0),
-    [document, setDocument] = useState(""),
-    [revision, setRevision] = useState(""),
+    [document, setDocument] = useState(initialDocument),
+    [revision, setRevision] = useState(initialRevision),
     [revPage, setRevPage] = useState(0),
     [point, setPoint] = useState(""),
     [pointPage, setPointPage] = useState(0),

@@ -1,3 +1,4 @@
+import { approvalRoutes } from "./approvals";
 import { communicationRoutes } from "./messages";
 import { reviewRoutes } from "./review";
 import { documentRoutes } from "./documents";
@@ -268,6 +269,7 @@ export function createApp(
   app.route("/", documentRoutes());
   app.route("/", reviewRoutes());
   app.route("/", communicationRoutes());
+  app.route("/", approvalRoutes());
   app.all("/api/*", () => {
     throw new HttpError(404, "Not found");
   });

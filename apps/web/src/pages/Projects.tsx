@@ -212,6 +212,9 @@ export function Projects({
                     <NavLink to={`/projects/${p.id}/messages`}>
                       {t("messages")}
                     </NavLink>
+                    <NavLink to={`/projects/${p.id}/approvals`}>
+                      {t("approvals")}
+                    </NavLink>
                     <NavLink to={`/projects/${p.id}/requests`}>
                       {t("requests")}
                     </NavLink>

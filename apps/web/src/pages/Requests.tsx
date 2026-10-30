@@ -1,3 +1,4 @@
+import { ApprovalForm } from "../approvals/ApprovalForm";
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { NavLink, useNavigate, useParams, useSearchParams } from "react-router";
@@ -54,6 +55,10 @@ export function Requests({ projects }: { projects: Project[] }) {
   );
 }
 function ProjectRequests({ project }: { project: string }) {
+  const navigate = useNavigate();
+  const [approvalSource, setApprovalSource] = useState<TechnicalRequest | null>(
+    null,
+  );
   const { t } = useTranslation(),
     [q, setQ] = useState(""),
     [query, setQuery] = useState(""),
@@ -190,6 +195,9 @@ function ProjectRequests({ project }: { project: string }) {
                   <button onClick={() => setEditing(r)}>
                     {t("editRequest")}
                   </button>
+                  <button onClick={() => setApprovalSource(r)}>
+                    {t("requestApproval")}
+                  </button>
                 </td>
               </tr>
             ))}
@@ -208,6 +216,20 @@ function ProjectRequests({ project }: { project: string }) {
           {t("next")}
         </button>
       </div>
+      {approvalSource && (
+        <ApprovalForm
+          seed={{
+            project,
+            technical_request_id: approvalSource.id,
+            message_id: approvalSource.message_id,
+            title: approvalSource.title,
+          }}
+          onClose={() => setApprovalSource(null)}
+          onSaved={(id) => {
+            navigate(`/projects/${project}/approvals?approval=${id}`);
+          }}
+        />
+      )}
       {editing && (
         <RequestForm
           project={project}

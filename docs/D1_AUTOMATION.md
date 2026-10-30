@@ -34,7 +34,7 @@ préférer un audit manuel à une reconnaissance trop permissive.
 
 Pour un schéma correspondant exactement à 0004, les migrations 0001–0004 absentes
 du journal sont enregistrées sans rejouer leurs SQL. Wrangler applique ensuite
-0005 et les suivantes manquantes (dont 0006 pour la messagerie), transactionnellement avec son entrée de journal, puis le script
+0005 et les suivantes manquantes (dont 0006 pour la messagerie et 0007 pour les approbations), transactionnellement avec son entrée de journal, puis le script
 vérifie à nouveau le schéma complet, le journal et l'intégrité. Une nouvelle
 exécution sur une base à jour ne rejoue aucune migration. L'enregistrement de
 chaque migration manuelle est reprenable après interruption.
@@ -98,3 +98,5 @@ partiel, contraintes/triggers manquants, journal inconnu/contradictoire/dupliqu�
 Le contrôle et son intégration isolée ont été rejoués avec 0006, après 0005.
 Les résultats actuels sont regroupés dans [le rapport de phase 4](PHASE4_COMMUNICATIONS.md#rapport-automatisé--30-octobre-2026).
 Aucune exécution distante ni publication n'est déclarée par ces tests locaux.
+
+La phase 5 ajoute 0007 sans changer le contrôle : [rapport des approbations](PHASE5_APPROVALS.md).
