@@ -221,5 +221,6 @@
   "reviewSaved": "Enregistré",
   "reviewNotSaved": "Échec de l’enregistrement",
   "commentPage": "Page du commentaire",
-  "geometryUpdated": "Position ou dimensions de l’annotation modifiées."
+  "geometryUpdated": "Position ou dimensions de l’annotation modifiées.",
+  "annotatingRevision": "Annotations — révision {{revision}}"
 }

@@ -12,17 +12,28 @@ import {
   type ReviewItem,
   type ReviewTarget,
 } from "../../../../packages/shared/src/review";
-export function DocumentViewer({
-  revision,
-  previewSource,
-  onReviewNavigate,
-  target,
-}: {
+interface DocumentViewerProps {
   revision: Revision;
   previewSource?: { bytes: Uint8Array; url: string };
   onReviewNavigate?: (target: ReviewTarget) => void;
   target?: ReviewTarget | null;
-}) {
+}
+export function DocumentViewer(props: DocumentViewerProps) {
+  // PDF.js tasks, canvas, gestures and saving state belong to one revision.
+  // Old requests may finish against their original revision without touching the next session.
+  return (
+    <RevisionViewer
+      key={`${props.revision.id}:${props.previewSource ? "preview" : "stored"}`}
+      {...props}
+    />
+  );
+}
+function RevisionViewer({
+  revision,
+  previewSource,
+  onReviewNavigate,
+  target,
+}: DocumentViewerProps) {
   const { t } = useTranslation();
   const url = previewSource?.url ?? `/api/v1/revisions/${revision.id}/content`;
   const pageContainer = useRef<HTMLDivElement>(null);
@@ -191,7 +202,7 @@ export function DocumentViewer({
   }, [session.selected, session.annotations.data, space]);
   const image = ["png", "jpg", "jpeg", "webp"].includes(revision.extension);
   return (
-    <div ref={container} className="viewer">
+    <div ref={container} className="viewer" data-revision-id={revision.id}>
       <div className="toolbar">
         {revision.extension === "pdf" && (
           <>
@@ -292,6 +303,9 @@ export function DocumentViewer({
       {error && <p role="alert">{error}</p>}
       {reviewEnabled && (
         <>
+          <p className="eyebrow" data-testid="active-review-revision">
+            {t("annotatingRevision", { revision: revision.label })}
+          </p>
           <div
             className="annotation-toolbar"
             role="toolbar"

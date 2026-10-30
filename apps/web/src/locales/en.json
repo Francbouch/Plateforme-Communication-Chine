@@ -221,5 +221,6 @@
   "reviewSaved": "Saved",
   "reviewNotSaved": "Save failed",
   "commentPage": "Comment page",
-  "geometryUpdated": "Annotation position or dimensions changed."
+  "geometryUpdated": "Annotation position or dimensions changed.",
+  "annotatingRevision": "Annotations — revision {{revision}}"
 }
