@@ -7,14 +7,14 @@ import { resolve, extname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { Readable } from "node:stream";
 import { generateKeyPair, exportJWK, createLocalJWKSet, SignJWT } from "jose";
-import { createDatabase, migrate } from "./d1";
 import { createApp } from "../../apps/api/src/index";
 import { AccessIdentityProvider } from "../../apps/api/src/identity";
+import { migrate } from "./d1";
+import { Miniflare, convertV4MiniflareOptions } from "miniflare";
+import { build } from "esbuild";
 import { protectOrigin } from "../../middleware";
 import type { Bindings } from "../../apps/api/src/types";
 const folder = await mkdtemp(join(tmpdir(), "forgebridge-browser-"));
-const { db, runtime } = await createDatabase(folder);
-await migrate(db);
 const keys = await generateKeyPair("RS256");
 const publicKey = await exportJWK(keys.publicKey);
 const issuer = "https://forgebridge-browser-test.cloudflareaccess.com";
@@ -28,8 +28,7 @@ const token = await new SignJWT({ email: "browser@example.test", type: "app" })
   .setExpirationTime("10m")
   .sign(keys.privateKey);
 const env: Bindings = {
-  DB: db,
-  APP_ORIGIN: "http://127.0.0.1:4190",
+  APP_ORIGIN: "http://127.0.0.1:4191",
   ACCESS_ISSUER: issuer,
   ACCESS_AUD: "browser-test",
   ADMIN_EMAIL: "browser@example.test",
@@ -57,6 +56,8 @@ const upstream: typeof fetch = async (input, init) => {
   const type: Record<string, string> = {
     ".html": "text/html",
     ".js": "text/javascript",
+    ".mjs": "text/javascript",
+    ".wasm": "application/wasm",
     ".css": "text/css",
     ".svg": "image/svg+xml",
   };
@@ -66,6 +67,31 @@ const upstream: typeof fetch = async (input, init) => {
     },
   });
 };
+const bundled = await build({
+  stdin: {
+    contents: `import {createApp} from './apps/api/src/index';import {AccessIdentityProvider} from './apps/api/src/identity';import {createLocalJWKSet} from 'jose';const provider=new AccessIdentityProvider(createLocalJWKSet({keys:[${JSON.stringify({ ...publicKey, kid: "browser-test", alg: "RS256" })}]}));export default createApp(provider);`,
+    resolveDir: process.cwd(),
+  },
+  bundle: true,
+  format: "esm",
+  platform: "browser",
+  target: "es2022",
+  write: false,
+});
+const runtime = new Miniflare(
+  convertV4MiniflareOptions({
+    modules: true,
+    script: bundled.outputFiles[0].text,
+    compatibilityDate: "2026-10-29",
+    resourcePersistencePath: folder,
+    d1Databases: { DB: "forgebridge-browser" },
+    r2Buckets: { DOCUMENTS: "forgebridge-browser-files" },
+    bindings: { ...env } as Record<string, string>,
+  }),
+);
+const db = (await runtime.getD1Database("DB")) as unknown as D1Database;
+await migrate(db);
+env.DB = db;
 const app = createApp(
   new AccessIdentityProvider(
     createLocalJWKSet({
@@ -83,29 +109,46 @@ const server = createServer(async (req, res) => {
       if (v) headers.set(k, Array.isArray(v) ? v.join(",") : v);
     // Deliberately simulates the Access edge for tests, after independently tested JWT verification.
     headers.set("Cf-Access-Jwt-Assertion", token);
-    const response = await app.request(
-      "http://127.0.0.1:4190" + req.url,
-      {
-        method: req.method,
-        headers,
-        body: ["GET", "HEAD"].includes(req.method ?? "GET")
-          ? undefined
-          : Buffer.concat(chunks),
-      },
-      env,
-    );
+    for (const name of [
+      "host",
+      "connection",
+      "accept-encoding",
+      "transfer-encoding",
+    ])
+      headers.delete(name);
+    const options = {
+      method: req.method,
+      headers: Object.fromEntries(headers),
+      body: ["GET", "HEAD"].includes(req.method ?? "GET")
+        ? undefined
+        : Buffer.concat(chunks),
+    };
+    const url = "http://127.0.0.1:4191" + req.url;
+    const response = req.url?.startsWith("/api/")
+      ? await runtime.dispatchFetch(url, options)
+      : await app.request(url, options, env);
     res.writeHead(response.status, Object.fromEntries(response.headers));
     if (response.body)
       Readable.fromWeb(
         response.body as import("node:stream/web").ReadableStream,
       ).pipe(res);
     else res.end();
-  } catch {
+  } catch (error) {
+    console.error(
+      "Test harness request failed",
+      error instanceof Error
+        ? error.message +
+            " " +
+            (error.cause instanceof Error
+              ? error.cause.message + " " + JSON.stringify(error.cause.cause)
+              : JSON.stringify(error.cause))
+        : "Unknown error",
+    );
     res.writeHead(500);
     res.end("Test harness failed");
   }
 });
-server.listen(4190, "127.0.0.1", () =>
+server.listen(4191, "127.0.0.1", () =>
   console.log("Isolated private browser fixture ready"),
 );
 async function close() {

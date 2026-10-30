@@ -648,3 +648,213 @@ footer span {
     padding: 18px 15px;
   }
 }
+
+/* Document workspace: bounded lists, accessible controls and local scrolling. */
+.toolbar,
+.breadcrumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0;
+}
+.toolbar label {
+  min-width: 100px;
+}
+label {
+  display: grid;
+  gap: 7px;
+}
+.library-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+  margin: 20px 0;
+}
+.checkbox {
+  display: flex;
+  align-items: center;
+}
+.checkbox input {
+  width: auto;
+}
+.drop-zone {
+  padding: 24px;
+  border: 2px dashed var(--border, #cbd5e1);
+  border-radius: 12px;
+  text-align: center;
+  margin: 16px 0;
+}
+.drop-zone.dragging {
+  background: #dbeafe;
+  color: #172554;
+}
+.file-input {
+  max-width: 230px;
+}
+.transfer {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border, #ddd);
+}
+progress {
+  max-width: 160px;
+}
+.text-button {
+  display: inline-flex;
+  gap: 10px;
+  text-align: left;
+  align-items: center;
+  background: transparent;
+}
+.text-button small {
+  display: block;
+  opacity: 0.7;
+}
+td details {
+  position: relative;
+}
+td summary {
+  cursor: pointer;
+  list-style: none;
+}
+td details[open] {
+  min-width: 160px;
+}
+td details button,
+td details a {
+  display: block;
+  margin: 5px 0;
+}
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: #0f172a99;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  overflow: auto;
+  padding: 30px 16px;
+}
+.modal {
+  width: min(700px, 100%);
+  max-height: calc(100dvh - 60px);
+  overflow: auto;
+  margin: 0;
+  background: var(--surface, #fff);
+}
+.document-modal {
+  width: min(1250px, 100%);
+}
+.viewer {
+  min-width: 0;
+  margin: 20px 0;
+}
+.viewer .toolbar input {
+  width: 65px;
+}
+.viewer-content {
+  max-height: 75dvh;
+  overflow: auto;
+  padding: 12px;
+  background: #e2e8f0;
+  color: #0f172a;
+  min-height: 120px;
+}
+.viewer-content canvas {
+  display: block;
+  margin: auto;
+}
+.viewer-content img {
+  display: block;
+  object-fit: contain;
+  margin: auto;
+}
+.revision-upload {
+  display: grid;
+  gap: 12px;
+  padding: 16px 0;
+}
+.folder-picker {
+  border: 1px solid var(--border, #cbd5e1);
+  padding: 12px;
+  border-radius: 8px;
+  margin: 16px 0;
+}
+[data-theme="dark"] .modal {
+  background: #172234;
+}
+@media (max-width: 650px) {
+  .modal-backdrop {
+    padding: 8px;
+  }
+  .modal {
+    max-height: calc(100dvh - 16px);
+  }
+  .library-filters {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.breadcrumbs {
+  flex-direction: row;
+  justify-content: flex-start;
+}
+label > input:not([type="checkbox"]):not([type="file"]),
+label > select,
+label > textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: inherit;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 14px;
+}
+label {
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+}
+label > textarea {
+  min-height: 85px;
+  resize: vertical;
+}
+.button .file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+label.button:has(input:disabled) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+label.button:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.text-button {
+  border-color: transparent;
+  padding-left: 0;
+}
+.text-button:hover {
+  text-decoration: underline;
+  border-color: transparent;
+}
+.table-wrap th,
+.table-wrap td {
+  white-space: nowrap;
+}
+.table-wrap td:first-child {
+  white-space: normal;
+  min-width: 180px;
+  overflow-wrap: anywhere;
+}

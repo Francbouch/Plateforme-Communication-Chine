@@ -1,3 +1,4 @@
+import { documentRoutes } from "./documents";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { bodyLimit } from "hono/body-limit";
@@ -36,12 +37,14 @@ export function createApp(
       maxAge: 600,
     })(c, next),
   );
-  app.use(
-    "*",
-    bodyLimit({
-      maxSize: 32768,
-      onError: (c) => c.json({ error: "Request body too large" }, 413),
-    }),
+  app.use("*", (c, next) =>
+    c.req.method === "PUT" &&
+    /^\/api\/v1\/uploads\/[^/]+\/content$/.test(c.req.path)
+      ? next()
+      : bodyLimit({
+          maxSize: 32768,
+          onError: (c) => c.json({ error: "Request body too large" }, 413),
+        })(c, next),
   );
   app.onError((error, c) => {
     if (error instanceof HttpError)
@@ -130,6 +133,32 @@ export function createApp(
   app.get("/api/v1/projects", async (c) =>
     c.json(await c.get("store").projects(id(c.req.query("organization_id")))),
   );
+  app.get("/api/v1/projects/search", async (c) => {
+    const s = c.get("store"),
+      org = id(c.req.query("organization_id"));
+    await s.requireOrg(org);
+    const { projectScope } = await import("./database");
+    const g = projectScope("p", s.userId);
+    const q = (c.req.query("q") ?? "").slice(0, 160);
+    const status = c.req.query("status") ?? "";
+    const page =
+      Math.max(0, Math.min(10000, Number(c.req.query("page")) || 0)) | 0;
+    const rows = await s.all(
+      `SELECT p.*,COALESCE(p.lifecycle_status,p.status) AS status,(SELECT count(*) FROM documents d WHERE d.project_id=p.id AND d.status<>'archived') AS document_count,(SELECT group_concat(s.name,', ') FROM project_suppliers ps JOIN suppliers s ON s.id=ps.supplier_id WHERE ps.project_id=p.id) AS supplier_names FROM projects p WHERE p.organization_id=? AND ${g.text} AND (?='' OR instr(lower(p.name||' '||p.code||' '||p.description),lower(?))>0) AND (?='' OR COALESCE(p.lifecycle_status,p.status)=?) ORDER BY p.updated_at DESC,p.id LIMIT 51 OFFSET ?`,
+      org,
+      ...g.args,
+      q,
+      q,
+      status,
+      status,
+      page * 50,
+    );
+    return c.json({
+      items: rows.slice(0, 50),
+      hasMore: rows.length > 50,
+      page,
+    });
+  });
   app.post("/api/v1/projects", async (c) =>
     c.json(
       await c.get("store").saveProject(
@@ -232,6 +261,7 @@ export function createApp(
   app.delete("/api/v1/invitations/:id", async (c) =>
     c.json(await c.get("store").revokeInvitation(id(c.req.param("id")))),
   );
+  app.route("/", documentRoutes());
   app.all("/api/*", () => {
     throw new HttpError(404, "Not found");
   });

@@ -19,6 +19,9 @@
       "migrations_dir": "migrations",
     },
   ],
+  "r2_buckets": [
+    { "binding": "DOCUMENTS", "bucket_name": "forgebridge-documents" },
+  ],
   "ratelimits": [
     {
       "name": "RATE_LIMITER",
@@ -26,7 +29,7 @@
       "simple": { "limit": 60, "period": 60 },
     },
   ],
-  // D1 ID supplied by the owner. Add the optional DOCUMENTS R2 binding only after its dedicated bucket exists.
+  // Create the dedicated private forgebridge-documents bucket before deploying phase 2.
   // workers.dev is enabled behind the existing All traffic Cloudflare Access policy.
   // ACCESS_*, ADMIN_* remain dashboard-managed; ORIGIN_SHARED_SECRET stays a secret.
   // For local development override APP_ORIGIN via apps/api/.dev.vars.

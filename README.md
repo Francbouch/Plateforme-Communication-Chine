@@ -1,6 +1,6 @@
 # ForgeBridge
 
-Plateforme privée de collaboration industrielle Canada–Chine. React/Vite sur Vercel, API Hono sur Workers, données D1/SQLite et adaptateur R2 privé. Aucun service Supabase n’est utilisé au runtime ou à l’installation.
+Plateforme privée de collaboration industrielle Canada–Chine. React/Vite sur Vercel, API Hono sur Workers, données D1/SQLite et bibliothèque R2 privée. Aucun service Supabase n’est utilisé au runtime ou à l’installation.
 
 ## Accès privé
 
@@ -24,7 +24,7 @@ PLAYWRIGHT_CHROMIUM_EXECUTABLE=/usr/bin/chromium npm run test:preview
 PLAYWRIGHT_CHROMIUM_EXECUTABLE=/usr/bin/chromium npm run test:private
 ```
 
-Les tests navigateur nécessitent Chromium système au chemin indiqué, ou Playwright Chromium installé (omettre la variable dans ce cas). `test:private` démarre une **fixture de test en loopback** avec des clés temporaires et une base isolée, pas un fournisseur d’identité de développement utilisable en production. Elle teste vraiment la création/modification et le rechargement des projets. Le Worker publié n’importe jamais cette fixture et ne contient aucun bypass.
+Les tests navigateur nécessitent Chromium système au chemin indiqué, ou Playwright Chromium installé (omettre la variable dans ce cas). `test:private` démarre une **fixture de test en loopback** avec des clés temporaires et une base isolée, pas un fournisseur d’identité de développement utilisable en production. Elle teste la création/modification et le rechargement des projets, les dossiers, les transferts R2, les PDF/images, les téléchargements et les révisions. Le Worker publié n’importe jamais cette fixture et ne contient aucun bypass.
 
 ## Développer avec une vraie identité Access
 
@@ -34,12 +34,13 @@ Configurer les valeurs Worker listées dans [.env.example](.env.example), migrer
 
 Fonctionnel en tests locaux : organisation, profil/préférences, projets, fournisseurs et notes internes, association projet-fournisseur, rôles/activation, invitations préparatoires/révocation, audit/outbox. L’interface conserve ses trois langues, thème et navigation. Les sauvegardes échouées ne sont pas présentées comme réussies.
 
-R2 est un adaptateur privé préparé, sans endpoint documentaire. Uploads, PDF, révisions, annotations, notifications et messagerie restent à développer. Les invitations ne peuvent pas encore être acceptées et aucun fournisseur ne peut ouvrir de session.
+La phase 2 ajoute la bibliothèque documentaire persistante : dossiers, importations R2 privées (50 Mio par fichier), PDF.js, images, téléchargements, révisions immuables, statuts et historique, recherche/filtres paginés. Voir [PHASE2.md](PHASE2.md) pour la migration additive et le raccordement du bucket avant fusion. Annotations, notifications, approbations complètes et messagerie restent à développer. Les invitations ne peuvent pas encore être acceptées et aucun fournisseur ne peut ouvrir de session.
 
-La création distante D1/R2 et les déploiements ne sont pas effectués : aucun accès Cloudflare/Vercel n’était configuré. La confidentialité du **déploiement réel** doit être vérifiée après configuration d’Access et du verrou Vercel ; les tests locaux ne la prouvent pas.
+Le propriétaire a déjà raccordé Access, Vercel et D1 et confirmé la sauvegarde de ses projets. Le bucket R2 et la migration documentaire restent à raccorder avant le déploiement de la phase 2 ; cette session n’a pas d’accès distant Cloudflare/Vercel. La confidentialité du **déploiement réel** doit être vérifiée après configuration d’Access et du verrou Vercel ; les tests locaux ne la prouvent pas.
 
 ## Documentation
 
+- [Phase 2 : fonctionnement, mise à jour et tests](PHASE2.md)
 - [Audit initial](docs/MIGRATION_AUDIT.md), [ARCHITECTURE.md](ARCHITECTURE.md), [DATABASE.md](DATABASE.md)
 - [PERMISSIONS.md](PERMISSIONS.md), [SECURITY.md](SECURITY.md), [TESTING.md](TESTING.md)
 - [DEPLOYMENT.md](DEPLOYMENT.md), [VERCEL.md](VERCEL.md), [ROADMAP.md](ROADMAP.md)
