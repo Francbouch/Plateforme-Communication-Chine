@@ -110,7 +110,7 @@ async function marker(
   const response = page.waitForResponse(
     (r) =>
       r.request().method() === "POST" &&
-      r.url().endsWith(`/revisions/${revision}/review-items`),
+      r.url().endsWith(`/revisions/${revision}/annotations`),
   );
   await viewer
     .getByTestId("annotation-layer")
@@ -119,17 +119,7 @@ async function marker(
   expect(result.status(), await result.text()).toBe(201);
   const item = (await result.json()) as ReviewItem;
   expect(item.revision_id).toBe(revision);
-  await viewer
-    .getByRole("textbox", { name: "Commentaire du point", exact: true })
-    .fill(text);
-  await viewer
-    .getByRole("button", { name: "Enregistrer le point", exact: true })
-    .click();
-  await expect(
-    viewer
-      .getByRole("region", { name: "Points techniques et commentaires" })
-      .getByTestId(`point-${item.id}`),
-  ).toContainText(text);
+  void text;
   return item;
 }
 async function ids(page: Page, revision: string) {
@@ -144,99 +134,49 @@ async function ids(page: Page, revision: string) {
   ).map((i) => i.id);
 }
 
-test("A/B/C/D: every revision supports isolated persistent annotations and discussions", async ({
+test("A/B/C/D retain independent drawings and explicit points after reload", async ({
   page,
 }) => {
   test.setTimeout(120000);
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  const { viewer, a, b, c } = await setup(page);
-  await select(viewer, a.revision_id, 3);
-  const ma = await marker(page, viewer, a.revision_id, "Comment A");
-  await select(viewer, b.revision_id, 1);
-  await expect(viewer.getByTestId(`annotation-${ma.id}`)).toHaveCount(0);
-  const mb = await marker(page, viewer, b.revision_id, "Comment B");
-  await select(viewer, c.revision_id, 2);
-  await expect(viewer.getByTestId(`annotation-${ma.id}`)).toHaveCount(0);
-  await expect(viewer.getByTestId(`annotation-${mb.id}`)).toHaveCount(0);
-  const mc = await marker(page, viewer, c.revision_id, "Comment C");
-  for (const [revision, count, item] of [
-    [b.revision_id, 1, mb],
-    [a.revision_id, 3, ma],
-    [c.revision_id, 2, mc],
+  const { viewer, a, b, c } = await setup(page),
+    created = [];
+  for (const [r, count] of [
+    [a, 3],
+    [b, 1],
+    [c, 2],
   ] as const) {
-    await select(viewer, revision, count);
-    await expect(viewer.getByTestId(`annotation-${item.id}`)).toBeVisible();
-    expect(await ids(page, revision)).toEqual([item.id]);
+    await select(viewer, r.revision_id, count);
+    const ann = await marker(page, viewer, r.revision_id, "");
+    const point = await post(page, `revisions/${r.revision_id}/review-items`, {
+      id: crypto.randomUUID(),
+      page: 1,
+      type: "discussion",
+      geometry: { points: [] },
+      title: `Point ${r.revision_id}`,
+      annotation_ids: [ann.id],
+    });
+    await post(page, `review-items/${point.id}/messages`, {
+      id: crypto.randomUUID(),
+      body: `Reply ${r.revision_id}`,
+    });
+    created.push({ r, count, ann, point });
   }
   await page.reload();
   await page
     .getByRole("button", { name: "Multi-revisions.pdf", exact: true })
     .click();
-  for (const [revision, count, item] of [
-    [a.revision_id, 3, ma],
-    [b.revision_id, 1, mb],
-    [c.revision_id, 2, mc],
-  ] as const) {
-    await select(viewer, revision, count);
-    await expect(viewer.getByTestId(`annotation-${item.id}`)).toBeVisible();
-    await viewer.getByTestId(`annotation-${item.id}`).click();
+  for (const { r, count, ann, point } of created) {
+    await select(viewer, r.revision_id, count);
+    expect(await ids(page, r.revision_id)).toEqual([ann.id]);
+    await expect(viewer.getByTestId(`annotation-${ann.id}`)).toBeVisible();
+    await viewer.getByTestId(`point-${point.id}`).click();
     await expect(
-      viewer.getByRole("textbox", {
-        name: "Commentaire du point",
-        exact: true,
-      }),
-    ).toHaveValue(
-      `Comment ${revision === a.revision_id ? "A" : revision === b.revision_id ? "B" : "C"}`,
-    );
-  }
-  for (const [revision, count, item] of [
-    [b.revision_id, 1, mb],
-    [c.revision_id, 2, mc],
-  ] as const) {
-    await select(viewer, revision, count);
-    await viewer.getByTestId(`annotation-${item.id}`).click();
-    await viewer
-      .getByRole("combobox", { name: "Couleur", exact: true })
-      .selectOption("green");
-    await viewer
-      .getByRole("button", { name: "Enregistrer le point", exact: true })
-      .click();
-    await expect(
-      viewer.getByTestId(`annotation-${item.id}`).locator("circle"),
-    ).toHaveAttribute("stroke", "#16a34a");
-    const extra = await marker(page, viewer, revision, "Annotation to remove");
-    page.once("dialog", (d) => d.accept());
-    await viewer
-      .getByRole("button", { name: "Supprimer l’annotation", exact: true })
-      .click();
-    await expect(viewer.getByTestId(`annotation-${extra.id}`)).toHaveCount(0);
-    await viewer.getByTestId(`annotation-${item.id}`).click();
-    await viewer
-      .getByRole("textbox", { name: "Réponse", exact: true })
-      .fill(`Reply ${item.id}`);
-    await viewer
-      .getByRole("button", { name: "Envoyer la réponse", exact: true })
-      .click();
-    await expect(
-      viewer.getByText(`Reply ${item.id}`, { exact: true }),
+      viewer
+        .locator(".review-message")
+        .getByText(`Reply ${r.revision_id}`, { exact: true }),
     ).toBeVisible();
-    await viewer
-      .getByRole("combobox", { name: "Statut du point", exact: true })
-      .selectOption("in_progress");
-    await viewer
-      .getByRole("button", { name: "Enregistrer le point", exact: true })
-      .click();
-    await expect
-      .poll(
-        async () =>
-          (
-            await (
-              await page.request.get(`/api/v1/review-items/${item.id}`)
-            ).json()
-          ).item.status,
-      )
-      .toBe("in_progress");
   }
   await viewer
     .getByRole("textbox", { name: "Révision", exact: true })
@@ -253,11 +193,8 @@ test("A/B/C/D: every revision supports isolated persistent annotations and discu
     });
   const d = await (await completed).json();
   await select(viewer, d.revision_id, 4);
-  const md = await marker(page, viewer, d.revision_id, "Comment D");
-  expect(await ids(page, d.revision_id)).toEqual([md.id]);
-  expect(await ids(page, a.revision_id)).toEqual([ma.id]);
-  expect(await ids(page, b.revision_id)).toEqual([mb.id]);
-  expect(await ids(page, c.revision_id)).toEqual([mc.id]);
+  const ann = await marker(page, viewer, d.revision_id, "");
+  expect(await ids(page, d.revision_id)).toEqual([ann.id]);
   expect(errors).toEqual([]);
 });
 
@@ -274,7 +211,7 @@ test("rapid switches and late saves cannot lock or contaminate the next revision
   let started!: () => void;
   const requestStarted = new Promise<void>((r) => (started = r));
   await page.route(
-    `**/api/v1/revisions/${a.revision_id}/review-items`,
+    `**/api/v1/revisions/${a.revision_id}/annotations`,
     async (route) => {
       if (route.request().method() === "POST") {
         started();

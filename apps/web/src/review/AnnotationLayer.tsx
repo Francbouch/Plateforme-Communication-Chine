@@ -81,8 +81,12 @@ export function AnnotationLayer({
           (i) => i.id === target.getAttribute("data-review-id"),
         );
     if (tool === "select") {
-      if (!selected) return;
-      session.setSelected(selected.id);
+      if (!selected) {
+        session.setSelectedAnnotations([]);
+        return;
+      }
+      session.selectAnnotation(selected, e.ctrlKey || e.metaKey);
+      if (e.ctrlKey || e.metaKey) return;
       session.setPanel(true);
       const base = {
         id: selected.id,
@@ -181,7 +185,11 @@ export function AnnotationLayer({
   ) {
     const p = i.geometry.points.map((point) => toScreen(point, space)),
       stroke = colorValues[i.color],
-      selected = session.selected === i.id,
+      selected =
+        session.selectedAnnotations.includes(i.id) ||
+        (!!session.selected &&
+          session.items.find((a) => a.id === i.id)?.point_id ===
+            session.selected),
       props = {
         stroke,
         strokeWidth: selected ? 3 : 2,
@@ -209,7 +217,7 @@ export function AnnotationLayer({
               fontSize="11"
               fontWeight="700"
             >
-              {i.number ? String(i.number).padStart(3, "0") : "…"}
+              {"•"}
             </text>
           </>
         ) : i.type === "text" ? (

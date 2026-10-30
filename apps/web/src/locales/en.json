@@ -222,5 +222,10 @@
   "reviewNotSaved": "Save failed",
   "commentPage": "Comment page",
   "geometryUpdated": "Annotation position or dimensions changed.",
-  "annotatingRevision": "Annotations — revision {{revision}}"
+  "annotatingRevision": "Annotations — revision {{revision}}",
+  "point_published": "Point published",
+  "point_cancelled": "Point cancelled",
+  "point_deleted": "Draft removed",
+  "annotations_linked": "Annotations linked",
+  "annotations_detached": "Annotations detached"
 }

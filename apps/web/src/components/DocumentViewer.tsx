@@ -183,8 +183,11 @@ function RevisionViewer({
   }, [pdf, page, zoom, fit, width, t, rotation]);
   useEffect(() => {
     if (!session.selected || !pageContainer.current) return;
+    const annotationId =
+      session.items.find((i) => i.point_id === session.selected)?.id ??
+      session.selected;
     const node = pageContainer.current.querySelector(
-      `[data-testid="annotation-${session.selected}"]`,
+      `[data-testid="annotation-${annotationId}"]`,
     );
     if (!node) return;
     const box = node.getBoundingClientRect(),

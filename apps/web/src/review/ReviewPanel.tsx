@@ -28,36 +28,40 @@ export function ReviewPanel({
   onNavigate: (target: ReviewTarget) => void;
 }) {
   const { t } = useTranslation(),
-    [hideResolved, setHideResolved] = useState(true),
+    [tab, setTab] = useState("points"),
     [status, setStatus] = useState(""),
-    [pageFilter, setPageFilter] = useState(""),
-    [allRevisions, setAllRevisions] = useState(false),
+    [publication, setPublication] = useState(""),
+    [all, setAll] = useState(false),
     [listPage, setListPage] = useState(0),
+    [title, setTitle] = useState(""),
+    [description, setDescription] = useState(""),
+    [reply, setReply] = useState(""),
+    [target, setTarget] = useState(""),
     [replyPage, setReplyPage] = useState(0),
-    [historyPage, setHistoryPage] = useState(0),
-    [newComment, setNewComment] = useState(""),
-    [commentPage, setCommentPage] = useState(currentPage),
-    [reply, setReply] = useState("");
-  const actor = qc.getQueryData<Account>(["me"])?.profile.id;
+    [historyPage, setHistoryPage] = useState(0);
   const createId = useRef(crypto.randomUUID()),
     replyId = useRef(crypto.randomUUID());
+  const actor = qc.getQueryData<Account>(["me"])?.profile.id;
   useEffect(() => {
     setListPage(0);
-  }, [hideResolved, status, pageFilter, allRevisions, revision.id]);
+  }, [status, publication, all, revision.id]);
   useEffect(() => {
-    setCommentPage(currentPage);
-  }, [currentPage]);
-  useEffect(() => {
+    setReply("");
     setReplyPage(0);
     setHistoryPage(0);
-    setReply("");
     replyId.current = crypto.randomUUID();
   }, [session.selected]);
+  useEffect(() => {
+    if (session.selected) setTab("points");
+  }, [session.selected]);
+  useEffect(() => {
+    if (!session.selected && session.selectedAnnotations.length)
+      setTab("annotations");
+  }, [session.selected, session.selectedAnnotations]);
   const params = new URLSearchParams({
-    revision_id: allRevisions ? "" : revision.id,
-    hide_resolved: hideResolved ? "1" : "0",
+    revision_id: all ? "" : revision.id,
     status,
-    page_number: pageFilter,
+    publication,
     page: String(listPage),
   });
   const list = useQuery({
@@ -78,187 +82,314 @@ export function ReviewPanel({
     enabled: session.panel && !!session.selected,
     staleTime: 30000,
   });
-  async function startDiscussion() {
-    if (!newComment.trim()) return;
+  const selected = session.items.filter((i) =>
+    session.selectedAnnotations.includes(i.id),
+  );
+  async function create() {
     try {
       await session.create({
         id: createId.current,
-        page: commentPage,
+        page: currentPage,
         type: "discussion",
         color: "blue",
         geometry: { points: [] },
-        summary: newComment,
+        title,
+        summary: description,
+        annotation_ids: selected.map((i) => i.id),
       });
-      setNewComment("");
       createId.current = crypto.randomUUID();
+      setTitle("");
+      setDescription("");
+      setTab("points");
+      await qc.invalidateQueries({
+        queryKey: ["review", "annotations", revision.id],
+      });
     } catch {
-      /* State and retry ID are preserved. */
+      /* Preserve input and ID for retry. */
     }
   }
-  async function replyToPoint() {
-    if (!session.selected || !reply.trim()) return;
-    try {
-      await session.mutation(() =>
-        api(`review-items/${session.selected}/messages`, {
-          id: replyId.current,
-          body: reply,
-        }),
-      );
-      setReply("");
-      replyId.current = crypto.randomUUID();
-    } catch {
-      /* Input remains retryable. */
-    }
-  }
+  const navigate = (i: ReviewItem) => {
+    session.setSelected(i.id);
+    setTab("points");
+    onNavigate({
+      id: i.id,
+      page: Number(i.pages?.split(",")[0]) || i.page,
+      revision_id: i.revision_id,
+    });
+  };
   return (
     <section className="review-panel" aria-label={t("technicalPoints")}>
-      <h3>{t("technicalPoints")}</h3>
-      <div className="review-filters">
-        <label className="checkbox">
-          <input
-            type="checkbox"
-            checked={hideResolved}
-            onChange={(e) => setHideResolved(e.target.checked)}
-          />
-          {t("hideResolved")}
-        </label>
-        <label>
-          {t("discussionStatus")}
-          <select value={status} onChange={(e) => setStatus(e.target.value)}>
-            <option value="">{t("allStatuses")}</option>
-            {reviewStatuses.map((s) => (
-              <option key={s} value={s}>
-                {t(`review_${s}`)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          {t("page")}
-          <input
-            type="number"
-            min={1}
-            aria-label={t("filterPage")}
-            value={pageFilter}
-            onChange={(e) => setPageFilter(e.target.value)}
-          />
-        </label>
-        <label className="checkbox">
-          <input
-            type="checkbox"
-            checked={allRevisions}
-            onChange={(e) => setAllRevisions(e.target.checked)}
-          />
-          {t("allRevisions")}
-        </label>
-      </div>
-      {list.isPending && <p>{t("loading")}</p>}
-      {list.isError && <p role="alert">{t("reviewLoadError")}</p>}
-      <ol className="review-list">
-        {list.data?.items.map((i) => (
-          <li key={i.id} data-testid={`point-${i.id}`}>
-            <button
-              className={session.selected === i.id ? "selected" : ""}
-              onClick={() => {
-                session.setSelected(i.id);
-                onNavigate({
-                  id: i.id,
-                  page: i.page,
-                  revision_id: i.revision_id,
-                });
-              }}
-            >
-              <strong>
-                #{String(i.number).padStart(3, "0")} ·{" "}
-                {i.summary || i.content || t(`tool_${i.type}`)}
-              </strong>
-              <span>
-                {t("page")} {i.page} · {t("revision")} {i.revision_label} ·{" "}
-                {t(`review_${i.status}`)}
-              </span>
-              <small>
-                {i.author} · {new Date(i.updated_at).toLocaleString()}
-                {i.responsible ? ` · ${i.responsible}` : ""}
-                {i.annotation_deleted_at ? ` · ${t("annotationRemoved")}` : ""}
-              </small>
-            </button>
-          </li>
-        ))}
-      </ol>
       <div className="toolbar">
         <button
-          disabled={listPage === 0}
-          onClick={() => setListPage(listPage - 1)}
+          aria-pressed={tab === "points"}
+          onClick={() => setTab("points")}
         >
-          {t("previous")}
+          Points techniques
         </button>
-        <span>{listPage + 1}</span>
         <button
-          disabled={!list.data?.hasMore}
-          onClick={() => setListPage(listPage + 1)}
+          aria-pressed={tab === "annotations"}
+          onClick={() => setTab("annotations")}
         >
-          {t("next")}
+          Annotations
         </button>
       </div>
+      {tab === "annotations" && (
+        <>
+          <p>Les dessins sont indépendants des points techniques.</p>
+          <div className="toolbar">
+            <button
+              onClick={() =>
+                session.setSelectedAnnotations(session.items.map((i) => i.id))
+              }
+            >
+              Sélectionner les dessins chargés de cette page
+            </button>
+            <button onClick={() => session.setSelectedAnnotations([])}>
+              Désélectionner
+            </button>
+          </div>
+          <p>
+            {selected.length} annotation(s) sélectionnée(s) · page {currentPage}
+            /{pageCount}
+          </p>
+          {session.items.map((i) => (
+            <div key={i.id} className="review-message">
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={session.selectedAnnotations.includes(i.id)}
+                  onChange={() => session.selectAnnotation(i, true)}
+                />
+                {t(`tool_${i.type}`)}
+                {i.point_id ? " · Associée" : ""}
+              </label>
+              {session.selectedAnnotations.length === 1 &&
+                selected[0]?.id === i.id && (
+                  <AnnotationEditor
+                    key={`${i.id}-${i.version}`}
+                    item={i}
+                    session={session}
+                  />
+                )}
+            </div>
+          ))}
+          <label>
+            Point technique existant
+            <select
+              aria-label="Point technique existant"
+              value={target}
+              onChange={(e) => setTarget(e.target.value)}
+            >
+              <option value="">Choisir un point</option>
+              {list.data?.items
+                .filter((p) => p.revision_id === revision.id)
+                .map((p) => (
+                  <option key={p.id} value={p.id}>
+                    #{String(p.number).padStart(3, "0")} — {p.title}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <button
+            disabled={
+              !target ||
+              !selected.length ||
+              selected.length > 100 ||
+              session.saving
+            }
+            onClick={() => void session.link(target, selected).catch(() => {})}
+          >
+            Associer la sélection
+          </button>
+          <button
+            disabled={
+              !selected.length || selected.length > 100 || session.saving
+            }
+            onClick={() => void session.link(null, selected).catch(() => {})}
+          >
+            Détacher la sélection
+          </button>
+        </>
+      )}
+      {tab === "points" && (
+        <>
+          <div className="review-filters">
+            <label>
+              Publication
+              <select
+                value={publication}
+                onChange={(e) => setPublication(e.target.value)}
+              >
+                <option value="">Tous</option>
+                <option value="draft">Brouillons</option>
+                <option value="published">Publiés</option>
+              </select>
+            </label>
+            <label>
+              Statut
+              <select
+                aria-label={t("discussionStatus")}
+                value={status}
+                onChange={(e) => setStatus(e.target.value)}
+              >
+                <option value="">Tous les statuts</option>
+                {reviewStatuses.map((s) => (
+                  <option key={s} value={s}>
+                    {t(`review_${s}`)}
+                  </option>
+                ))}
+                <option value="cancelled">Annulés</option>
+              </select>
+            </label>
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={all}
+                onChange={(e) => setAll(e.target.checked)}
+              />
+              {t("allRevisions")}
+            </label>
+          </div>
+          {list.isError && <p role="alert">{t("reviewLoadError")}</p>}
+          <ol className="review-list">
+            {list.data?.items.map((i) => (
+              <li key={i.id} data-testid={`point-${i.id}`}>
+                <button
+                  className={session.selected === i.id ? "selected" : ""}
+                  onClick={() => navigate(i)}
+                >
+                  <strong>
+                    {i.publication === "published"
+                      ? `#${String(i.number).padStart(3, "0")} · `
+                      : ""}
+                    {i.title || i.summary || "Ancien échange à examiner"}
+                  </strong>
+                  <span>
+                    {i.publication === "published" ? "Publié" : "Brouillon"} ·{" "}
+                    {i.cancelled_at ? "Annulé" : t(`review_${i.status}`)} ·{" "}
+                    {t("revision")} {i.revision_label}
+                  </span>
+                  <small>
+                    Pages {i.pages || i.page} · {i.annotation_count ?? 0}{" "}
+                    annotations · {i.comment_count ?? 0} commentaires
+                  </small>
+                  <small>
+                    {i.author} · {new Date(i.created_at).toLocaleString()}
+                    {i.legacy_review ? " · Données historiques à examiner" : ""}
+                  </small>
+                </button>
+              </li>
+            ))}
+          </ol>
+          <div className="toolbar">
+            <button
+              disabled={!listPage}
+              onClick={() => setListPage(listPage - 1)}
+            >
+              {t("previous")}
+            </button>
+            <span>{listPage + 1}</span>
+            <button
+              disabled={!list.data?.hasMore}
+              onClick={() => setListPage(listPage + 1)}
+            >
+              {t("next")}
+            </button>
+          </div>
+        </>
+      )}
+      {selected.length > 100 && (
+        <p role="alert">
+          Sélectionnez au maximum 100 annotations par opération. Vous pouvez
+          associer plusieurs sélections au même point.
+        </p>
+      )}
       <details>
-        <summary>{t("newDiscussion")}</summary>
+        <summary>Créer un point technique</summary>
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            void startDiscussion();
+            void create();
           }}
         >
           <label>
-            {t("comment")}
-            <textarea
-              value={newComment}
-              maxLength={4000}
+            Titre
+            <input
+              aria-label="Titre du point"
               required
+              maxLength={200}
+              value={title}
               onChange={(e) => {
-                setNewComment(e.target.value);
+                setTitle(e.target.value);
                 createId.current = crypto.randomUUID();
               }}
             />
           </label>
           <label>
-            {t("page")}
-            <input
-              type="number"
-              min={1}
-              max={pageCount}
-              aria-label={t("commentPage")}
-              value={commentPage}
-              onChange={(e) => setCommentPage(Number(e.target.value) || 1)}
+            Description
+            <textarea
+              maxLength={4000}
+              value={description}
+              onChange={(e) => {
+                setDescription(e.target.value);
+                createId.current = crypto.randomUUID();
+              }}
             />
           </label>
-          <button disabled={session.saving}>{t("addComment")}</button>
-        </form>
-      </details>
-      {detail.isPending && session.selected && <p>{t("loading")}</p>}
-      {detail.isError && <p role="alert">{t("reviewLoadError")}</p>}
-      {detail.data && (
-        <article className="review-thread" aria-label={t("discussionThread")}>
-          <h3>#{String(detail.data.item.number).padStart(3, "0")}</h3>
           <p>
-            {detail.data.item.author} · {t("page")} {detail.data.item.page}
+            {selected.length} annotation(s) sélectionnée(s). Un dessin déjà
+            associé doit être détaché avant la création.
           </p>
           <button
-            onClick={() =>
-              onNavigate({
-                id: detail.data!.item.id,
-                page: detail.data!.item.page,
-                revision_id: detail.data!.item.revision_id,
-              })
-            }
+            disabled={session.saving || !title.trim() || selected.length > 100}
           >
-            {t("goToAnnotation")}
+            Créer le brouillon
           </button>
+        </form>
+      </details>
+      <small>
+        « Brouillon » indique un état de préparation. Les permissions
+        fournisseurs ne sont pas encore disponibles.
+      </small>
+      {detail.isError && session.selected && (
+        <p role="alert">{t("reviewLoadError")}</p>
+      )}
+      {detail.data && !detail.data.item.point_deleted_at && (
+        <article className="review-thread" aria-label={t("discussionThread")}>
+          <h3>
+            {detail.data.item.publication === "published"
+              ? `#${String(detail.data.item.number).padStart(3, "0")} · `
+              : ""}
+            {detail.data.item.title || detail.data.item.summary}
+          </h3>
           <PointEditor
             key={`${detail.data.item.id}-${detail.data.item.version}`}
             item={detail.data.item}
-            actor={actor}
             session={session}
           />
+          <h4>Annotations associées</h4>
+          {detail.data.annotations.map((a) => (
+            <div key={a.id}>
+              <button
+                onClick={() => {
+                  session.setSelectedAnnotations([a.id]);
+                  onNavigate({
+                    id: detail.data!.item.id,
+                    page: a.page,
+                    revision_id: a.revision_id,
+                  });
+                }}
+              >
+                {t(`tool_${a.type}`)} · page {a.page}
+              </button>
+              <button
+                disabled={session.saving}
+                onClick={() => void session.link(null, [a]).catch(() => {})}
+              >
+                Détacher
+              </button>
+            </div>
+          ))}
           <h4>{t("replies")}</h4>
           {detail.data.messages.map((m) => (
             <Message
@@ -270,12 +401,11 @@ export function ReviewPanel({
           ))}
           <div className="toolbar">
             <button
-              disabled={replyPage === 0}
+              disabled={!replyPage}
               onClick={() => setReplyPage(replyPage - 1)}
             >
               {t("previous")}
             </button>
-            <span>{replyPage + 1}</span>
             <button
               disabled={!detail.data.hasMoreMessages}
               onClick={() => setReplyPage(replyPage + 1)}
@@ -286,15 +416,26 @@ export function ReviewPanel({
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              void replyToPoint();
+              void session
+                .mutation(() =>
+                  api(`review-items/${detail.data!.item.id}/messages`, {
+                    id: replyId.current,
+                    body: reply,
+                  }),
+                )
+                .then(() => {
+                  setReply("");
+                  replyId.current = crypto.randomUUID();
+                })
+                .catch(() => {});
             }}
           >
             <label>
               {t("reply")}
               <textarea
                 required
-                value={reply}
                 maxLength={4000}
+                value={reply}
                 onChange={(e) => {
                   setReply(e.target.value);
                   replyId.current = crypto.randomUUID();
@@ -308,7 +449,7 @@ export function ReviewPanel({
           <details>
             <summary>{t("reviewHistory")}</summary>
             {detail.data.history.map((h) => (
-              <div key={h.id} className="review-event">
+              <div key={h.id}>
                 <strong>{t(h.action.replaceAll(".", "_"))}</strong>
                 <small>
                   {h.actor} · {new Date(h.created_at).toLocaleString()}
@@ -318,12 +459,11 @@ export function ReviewPanel({
             ))}
             <div className="toolbar">
               <button
-                disabled={historyPage === 0}
+                disabled={!historyPage}
                 onClick={() => setHistoryPage(historyPage - 1)}
               >
                 {t("previous")}
               </button>
-              <span>{historyPage + 1}</span>
               <button
                 disabled={!detail.data.hasMoreHistory}
                 onClick={() => setHistoryPage(historyPage + 1)}
@@ -339,118 +479,170 @@ export function ReviewPanel({
 }
 function PointEditor({
   item,
-  actor,
   session,
 }: {
   item: ReviewItem;
-  actor?: string;
   session: ReviewSession;
 }) {
   const { t } = useTranslation(),
+    [title, setTitle] = useState(
+      item.title || item.summary || "Ancien échange",
+    ),
     [summary, setSummary] = useState(item.summary),
-    [content, setContent] = useState(item.content),
-    [color, setColor] = useState(item.color),
     [status, setStatus] = useState(item.status),
-    [responsible, setResponsible] = useState(item.responsible),
-    own = actor === item.created_by;
+    [responsible, setResponsible] = useState(item.responsible);
+  const patch = (data: Record<string, unknown>) =>
+    void session
+      .updatePoint(item.id, { version: item.version, ...data })
+      .catch(() => {});
+  return (
+    <>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          patch({ title, summary, status, responsible });
+        }}
+      >
+        <label>
+          Titre
+          <input
+            required
+            maxLength={200}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
+        </label>
+        <label>
+          Description
+          <textarea
+            aria-label={t("pointComment")}
+            maxLength={4000}
+            value={summary}
+            onChange={(e) => setSummary(e.target.value)}
+          />
+        </label>
+        <label>
+          {t("discussionStatus")}
+          <select
+            aria-label={t("pointStatus")}
+            value={status}
+            onChange={(e) => setStatus(e.target.value as typeof status)}
+          >
+            {reviewStatuses.map((s) => (
+              <option key={s} value={s}>
+                {t(`review_${s}`)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          {t("responsible")}
+          <input
+            maxLength={120}
+            value={responsible}
+            onChange={(e) => setResponsible(e.target.value)}
+          />
+        </label>
+        <button disabled={session.saving}>{t("savePoint")}</button>
+      </form>
+      {item.publication === "draft" ? (
+        <div className="toolbar">
+          <button
+            disabled={session.saving}
+            onClick={() => patch({ publication: "published" })}
+          >
+            Publier le point
+          </button>
+          <button
+            disabled={session.saving}
+            onClick={() => {
+              if (
+                confirm(
+                  "Supprimer ce brouillon ? Les dessins seront conservés.",
+                )
+              )
+                patch({ point_deleted: true });
+            }}
+          >
+            Supprimer le brouillon
+          </button>
+        </div>
+      ) : (
+        <button
+          disabled={session.saving || !!item.cancelled_at}
+          onClick={() => {
+            if (confirm("Annuler ce point en conservant son historique ?"))
+              patch({ cancelled: true });
+          }}
+        >
+          Annuler le point
+        </button>
+      )}
+    </>
+  );
+}
+function AnnotationEditor({
+  item,
+  session,
+}: {
+  item: ReviewItem;
+  session: ReviewSession;
+}) {
+  const { t } = useTranslation(),
+    [content, setContent] = useState(item.content),
+    [color, setColor] = useState(item.color);
   return (
     <form
       onSubmit={(e) => {
         e.preventDefault();
         void session
-          .update(item.id, {
-            version: item.version,
-            status,
-            responsible,
-            ...(own
-              ? {
-                  summary,
-                  ...(!item.annotation_deleted_at ? { content, color } : {}),
-                }
-              : {}),
-          })
+          .update(item.id, { version: item.version, content, color })
           .catch(() => {});
       }}
     >
-      <label>
-        {t("comment")}
-        <textarea
-          aria-label={t("pointComment")}
-          maxLength={4000}
-          value={summary}
-          readOnly={!own}
-          onChange={(e) => setSummary(e.target.value)}
-        />
-      </label>
-      {item.type === "text" && !item.annotation_deleted_at && (
+      {item.type === "text" && (
         <label>
           {t("textNote")}
           <textarea
             maxLength={2000}
             value={content}
-            readOnly={!own}
             onChange={(e) => setContent(e.target.value)}
           />
         </label>
       )}
-      {!item.annotation_deleted_at && item.type !== "discussion" && (
-        <label>
-          {t("color")}
-          <select
-            value={color}
-            disabled={!own}
-            onChange={(e) => setColor(e.target.value as typeof color)}
-          >
-            {reviewColors.map((c) => (
-              <option key={c} value={c}>
-                {t(`color_${c}`)}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
       <label>
-        {t("discussionStatus")}
+        {t("color")}
         <select
-          aria-label={t("pointStatus")}
-          value={status}
-          onChange={(e) => setStatus(e.target.value as typeof status)}
+          value={color}
+          onChange={(e) => setColor(e.target.value as typeof color)}
         >
-          {reviewStatuses.map((s) => (
-            <option key={s} value={s}>
-              {t(`review_${s}`)}
+          {reviewColors.map((c) => (
+            <option key={c} value={c}>
+              {t(`color_${c}`)}
             </option>
           ))}
         </select>
       </label>
-      <label>
-        {t("responsible")}
-        <input
-          maxLength={120}
-          value={responsible}
-          onChange={(e) => setResponsible(e.target.value)}
-        />
-      </label>
-      <div className="toolbar">
-        <button disabled={session.saving}>{t("savePoint")}</button>
-        {own && !item.annotation_deleted_at && item.type !== "discussion" && (
-          <button
-            type="button"
-            disabled={session.saving}
-            onClick={() => {
-              if (confirm(t("removeAnnotationConfirm")))
-                void session
-                  .update(item.id, {
-                    version: item.version,
-                    annotation_deleted: true,
-                  })
-                  .catch(() => {});
-            }}
-          >
-            {t("removeAnnotation")}
-          </button>
-        )}
-      </div>
+      <button disabled={session.saving}>Enregistrer le dessin</button>
+      <button
+        type="button"
+        disabled={session.saving}
+        onClick={() => {
+          if (
+            confirm(
+              "Supprimer cette annotation ? Le point et sa discussion seront conservés.",
+            )
+          )
+            void session
+              .update(item.id, {
+                version: item.version,
+                annotation_deleted: true,
+              })
+              .catch(() => {});
+        }}
+      >
+        Supprimer l’annotation
+      </button>
     </form>
   );
 }

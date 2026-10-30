@@ -222,5 +222,10 @@
   "reviewNotSaved": "Échec de l’enregistrement",
   "commentPage": "Page du commentaire",
   "geometryUpdated": "Position ou dimensions de l’annotation modifiées.",
-  "annotatingRevision": "Annotations — révision {{revision}}"
+  "annotatingRevision": "Annotations — révision {{revision}}",
+  "point_published": "Point publié",
+  "point_cancelled": "Point annulé",
+  "point_deleted": "Brouillon supprimé",
+  "annotations_linked": "Annotations associées",
+  "annotations_detached": "Annotations détachées"
 }

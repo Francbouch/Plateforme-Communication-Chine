@@ -71,6 +71,15 @@ export function validGeometry(type: ReviewType, g: Geometry) {
   );
 }
 export interface ReviewItem {
+  title?: string;
+  publication?: "draft" | "published";
+  point_deleted_at?: string | null;
+  cancelled_at?: string | null;
+  legacy_review?: number;
+  point_id?: string | null;
+  annotation_count?: number;
+  comment_count?: number;
+  pages?: string;
   id: string;
   document_id: string;
   revision_id: string;

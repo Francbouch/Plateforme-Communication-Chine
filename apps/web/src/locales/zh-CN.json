@@ -222,5 +222,10 @@
   "reviewNotSaved": "保存失败",
   "commentPage": "评论页码",
   "geometryUpdated": "已更改批注位置或尺寸。",
-  "annotatingRevision": "批注 — 修订 {{revision}}"
+  "annotatingRevision": "批注 — 修订 {{revision}}",
+  "point_published": "技术点已发布",
+  "point_cancelled": "技术点已取消",
+  "point_deleted": "草稿已删除",
+  "annotations_linked": "已关联批注",
+  "annotations_detached": "已解除批注关联"
 }

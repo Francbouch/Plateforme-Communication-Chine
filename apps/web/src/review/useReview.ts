@@ -12,8 +12,11 @@ export type ReviewCreateData = Pick<
   ReviewItem,
   "id" | "page" | "type" | "geometry" | "color"
 > &
-  Partial<Pick<ReviewItem, "summary" | "content" | "responsible" | "status">>;
+  Partial<
+    Pick<ReviewItem, "summary" | "content" | "responsible" | "status" | "title">
+  > & { annotation_ids?: string[] };
 export interface ReviewDetail {
+  annotations: ReviewItem[];
   item: ReviewItem;
   messages: ReviewMessage[];
   history: ReviewEvent[];
@@ -21,6 +24,7 @@ export interface ReviewDetail {
   hasMoreHistory: boolean;
 }
 export function useReview(revision: Revision, page: number, enabled: boolean) {
+  const [selectedAnnotations, setSelectedAnnotations] = useState<string[]>([]);
   const [saved, setSaved] = useState(false);
   const activeRevision = useRef(revision.id);
   activeRevision.current = revision.id;
@@ -45,7 +49,14 @@ export function useReview(revision: Revision, page: number, enabled: boolean) {
     enabled,
     staleTime: 30000,
   });
-  const items = annotations.data?.pages.flatMap((p) => p.items) ?? [];
+  const items = [
+    ...new Map(
+      (annotations.data?.pages.flatMap((p) => p.items) ?? []).map((i) => [
+        i.id,
+        i,
+      ]),
+    ).values(),
+  ];
   async function mutation<T>(
     fn: () => Promise<T>,
     confirmedPoint?: (result: T) => ReviewItem,
@@ -73,11 +84,19 @@ export function useReview(revision: Revision, page: number, enabled: boolean) {
   const create = async (data: ReviewCreateData) => {
     const revisionId = revision.id;
     const item = await mutation(
-      () => api<ReviewItem>(`revisions/${revisionId}/review-items`, data),
+      () =>
+        api<ReviewItem>(
+          `revisions/${revisionId}/${data.type === "discussion" ? "review-items" : "annotations"}`,
+          data,
+        ),
       (item) => item,
     );
     if (activeRevision.current === revisionId) {
-      setSelected(item.id);
+      if (data.type === "discussion") setSelected(item.id);
+      else {
+        setSelected(null);
+        setSelectedAnnotations([item.id]);
+      }
       setPanel(true);
     }
     return item;
@@ -87,11 +106,53 @@ export function useReview(revision: Revision, page: number, enabled: boolean) {
     data: Partial<ReviewItem> & { annotation_deleted?: true; version: number },
   ) =>
     mutation(
-      () => api<ReviewItem>(`review-items/${id}`, data, "PATCH"),
+      () => api<ReviewItem>(`annotations/${id}`, data, "PATCH"),
       (item) => item,
     );
   return {
     items,
+    selectedAnnotations,
+    setSelectedAnnotations,
+    selectAnnotation: (item: ReviewItem, multiple = false) => {
+      setSelectedAnnotations((old) =>
+        multiple
+          ? old.includes(item.id)
+            ? old.filter((id) => id !== item.id)
+            : [...old, item.id]
+          : [item.id],
+      );
+      setSelected(item.point_id ?? null);
+      setPanel(true);
+    },
+    link: async (pointId: string | null, rows: ReviewItem[]) =>
+      mutation(async () => {
+        await api(`revisions/${revision.id}/annotation-links`, {
+          point_id: pointId,
+          annotations: rows.map((i) => ({ id: i.id, version: i.version })),
+        });
+        await Promise.all([
+          client.invalidateQueries({
+            queryKey: ["review", "annotations", revision.id],
+          }),
+          client.invalidateQueries({
+            queryKey: ["review", "points", revision.document_id],
+          }),
+          client.invalidateQueries({ queryKey: ["review", "point"] }),
+        ]);
+      }),
+    updatePoint: async (id: string, data: Record<string, unknown>) => {
+      const result = await mutation(
+        () => api<ReviewItem>(`review-items/${id}`, data, "PATCH"),
+        (item) => item,
+      );
+      if (result.point_deleted_at) {
+        setSelected(null);
+        await client.invalidateQueries({
+          queryKey: ["review", "annotations", revision.id],
+        });
+      }
+      return result;
+    },
     annotations,
     selected,
     setSelected,
