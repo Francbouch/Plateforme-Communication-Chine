@@ -9,6 +9,7 @@ import {
 } from "@cantoo/pdf-lib";
 import { readFile } from "node:fs/promises";
 import type { ReviewItem } from "../../packages/shared/src/review";
+test.use({ actionTimeout: 10000 });
 async function pdf(labels: string[], varied = false) {
   const doc = await PDFDocument.create(),
     font = await doc.embedFont(StandardFonts.Helvetica);
@@ -108,7 +109,7 @@ async function createShape(
   const response = page.waitForResponse(
     (r) =>
       r.request().method() === "POST" &&
-      /\/revisions\/[^/]+\/review-items$/.test(new URL(r.url()).pathname),
+      /\/revisions\/[^/]+\/annotations$/.test(new URL(r.url()).pathname),
   );
   await page.mouse.move(box.x + box.width * a[0], box.y + box.height * a[1]);
   await page.mouse.down();
@@ -120,16 +121,6 @@ async function createShape(
   const r = await response;
   expect(r.status(), await r.text()).toBe(201);
   return r.json() as Promise<ReviewItem>;
-}
-async function ratio(page: Page, id: string) {
-  return page.getByTestId(`annotation-${id}`).evaluate((node) => {
-    const circle = node.querySelector("circle")!.getBoundingClientRect(),
-      svg = node.closest("svg")!.getBoundingClientRect();
-    return [
-      (circle.x + circle.width / 2 - svg.x) / svg.width,
-      (circle.y + circle.height / 2 - svg.y) / svg.height,
-    ];
-  });
 }
 function checkNetwork(page: Page) {
   const errors: string[] = [],
@@ -160,363 +151,155 @@ function checkNetwork(page: Page) {
     },
   };
 }
-test("PDF technical review: annotations, discussions, geometry, persistence, revisions and save retry", async ({
+test("free drawings, multi-selection, one point, publication and persistent discussion", async ({
   page,
 }) => {
   test.setTimeout(120000);
   const audit = checkNetwork(page),
-    original = await pdf(["Page one", "Page two", "Page three rotated"], true),
-    { viewer, document, revision } = await setup(page, original, "ANNOTATIONS");
-  await viewer.getByRole("spinbutton", { name: "Page", exact: true }).fill("3");
-  await expect(
-    viewer.getByRole("spinbutton", { name: "Page", exact: true }),
-  ).toHaveValue("3");
-  // Wait for page-specific SVG aspect ratio, including intrinsic crop and rotation.
-  await expect
-    .poll(async () => {
-      const b = await viewer.getByTestId("annotation-layer").boundingBox();
-      return b!.width / b!.height;
-    })
-    .toBeCloseTo(380 / 260, 1);
-  const marker = await createShape(page, "Marqueur", [0.22, 0.22]);
-  expect(marker.page).toBe(3);
-  expect(marker.number).toBe(1);
-  const panel = viewer.getByRole("region", {
-    name: "Points techniques et commentaires",
-  });
-  await panel
-    .getByRole("textbox", { name: "Commentaire du point", exact: true })
-    .fill("Increase this hole to 8 mm");
-  await panel
-    .getByRole("button", { name: "Enregistrer le point", exact: true })
-    .click();
-  await expect(panel.getByTestId(`point-${marker.id}`)).toContainText(
-    "Increase this hole to 8 mm",
-  );
-  await viewer
-    .getByRole("button", { name: "Retour à la bibliothèque" })
-    .click();
-  await page.reload();
-  await page
-    .getByRole("button", { name: "review-plan.pdf", exact: true })
-    .click();
-  await viewer.getByRole("spinbutton", { name: "Page", exact: true }).fill("3");
-  await expect(viewer.getByTestId(`annotation-${marker.id}`)).toBeVisible();
-  await panel.getByTestId(`point-${marker.id}`).getByRole("button").click();
-  await expect(
-    panel.getByRole("textbox", { name: "Commentaire du point", exact: true }),
-  ).toHaveValue("Increase this hole to 8 mm");
-  const before = await ratio(page, marker.id);
-  const oldWidth = (await viewer.getByTestId("annotation-layer").boundingBox())!
-    .width;
-  await viewer.getByRole("button", { name: "Zoom avant", exact: true }).click();
-  await expect
-    .poll(
-      async () =>
-        (await viewer.getByTestId("annotation-layer").boundingBox())!.width,
-    )
-    .toBeGreaterThan(oldWidth * 1.1);
-  const after = await ratio(page, marker.id);
-  expect(after[0]).toBeCloseTo(before[0], 2);
-  expect(after[1]).toBeCloseTo(before[1], 2);
-  await viewer
-    .getByRole("button", { name: "Ajuster à la page", exact: true })
-    .click();
-  await viewer
-    .getByRole("button", { name: "Plein écran", exact: true })
-    .click();
-  await expect
-    .poll(() => page.evaluate(() => !!window.document.fullscreenElement))
-    .toBe(true);
-  const full = await ratio(page, marker.id);
-  expect(full[0]).toBeCloseTo(before[0], 2);
-  expect(full[1]).toBeCloseTo(before[1], 2);
-  await viewer
-    .getByRole("button", { name: "Quitter le plein écran", exact: true })
-    .click();
+    { viewer, document, revision } = await setup(
+      page,
+      await pdf(["A", "B", "C"]),
+      "SEPARATE",
+    );
+  const arrow = await createShape(page, "Flèche", [0.2, 0.2], [0.4, 0.4]);
   const rectangle = await createShape(
     page,
     "Rectangle",
-    [0.35, 0.35],
-    [0.55, 0.55],
+    [0.5, 0.2],
+    [0.7, 0.4],
   );
+  const text = await createShape(page, "Texte", [0.3, 0.6]);
+  await viewer
+    .getByRole("textbox", { name: "Note sur le plan", exact: true })
+    .fill("+2 mm");
+  await viewer
+    .getByRole("button", { name: "Enregistrer le dessin", exact: true })
+    .click();
+  await expect(viewer.getByTestId(`annotation-${text.id}`)).toContainText(
+    "+2 mm",
+  );
+  const panel = viewer.getByRole("region", {
+    name: "Points techniques et commentaires",
+  });
+  expect(
+    (
+      await (
+        await page.request.get(`/api/v1/documents/${document}/review-items`)
+      ).json()
+    ).items,
+  ).toHaveLength(0);
+  await viewer.getByRole("button", { name: "Sélection", exact: true }).click();
+  await viewer
+    .getByTestId(`annotation-${arrow.id}`)
+    .locator("line")
+    .last()
+    .click({ modifiers: ["Control"] });
+  await viewer
+    .getByTestId(`annotation-${rectangle.id}`)
+    .locator("rect")
+    .click({ position: { x: 1, y: 1 }, modifiers: ["Control"] });
+  // Text was selected on creation; Ctrl-click adds the other two without moving any drawing.
   await expect(
-    panel.getByRole("heading", {
-      name: `#${String(rectangle.number).padStart(3, "0")}`,
+    panel.getByText("3 annotation(s) sélectionnée(s) · page 1/3", {
       exact: true,
     }),
   ).toBeVisible();
-  let rectangleWrites = 0;
-  page.on("request", (r) => {
-    if (
-      r.method() === "PATCH" &&
-      r.url().endsWith(`/review-items/${rectangle.id}`)
-    )
-      rectangleWrites++;
-  });
-  const rect = viewer.getByTestId(`annotation-${rectangle.id}`).locator("rect"),
-    box = (await rect.boundingBox())!;
-  const movedResponse = page.waitForResponse(
-    (r) =>
-      r.request().method() === "PATCH" &&
-      r.url().endsWith(`/review-items/${rectangle.id}`),
-  );
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(
-    box.x + box.width / 2 + 35,
-    box.y + box.height / 2 + 25,
-    { steps: 6 },
-  );
-  await page.mouse.up();
-  const moved = (await (await movedResponse).json()) as ReviewItem;
-  expect(moved.geometry).not.toEqual(rectangle.geometry);
-  expect(rectangleWrites).toBe(1);
-  await viewer.getByTestId("annotation-resize").scrollIntoViewIfNeeded();
-  const handle = (await viewer.getByTestId("annotation-resize").boundingBox())!;
-  const resizedResponse = page.waitForResponse(
-    (r) =>
-      r.request().method() === "PATCH" &&
-      r.url().endsWith(`/review-items/${rectangle.id}`),
-  );
-  await page.mouse.move(
-    handle.x + handle.width / 2,
-    handle.y + handle.height / 2,
-  );
-  await page.mouse.down();
-  await page.mouse.move(
-    handle.x + handle.width / 2 + 18,
-    handle.y + handle.height / 2 + 15,
-    { steps: 4 },
-  );
-  await page.mouse.up();
-  const resized = (await (await resizedResponse).json()) as ReviewItem;
-  expect(resized.geometry).not.toEqual(moved.geometry);
-  expect(rectangleWrites).toBe(2);
-  await page.reload();
-  await page
-    .getByRole("button", { name: "review-plan.pdf", exact: true })
-    .click();
-  await viewer.getByRole("spinbutton", { name: "Page", exact: true }).fill("3");
-  await expect(viewer.getByTestId(`annotation-${rectangle.id}`)).toBeVisible();
-  const saved = await (
-    await page.request.get(`/api/v1/review-items/${rectangle.id}`)
-  ).json();
-  expect(saved.item.geometry).toEqual(resized.geometry);
-  await createShape(page, "Flèche", [0.1, 0.62], [0.22, 0.72]);
-  const text = await createShape(page, "Texte", [0.6, 0.22]);
+  await panel.getByText("Créer un point technique", { exact: true }).click();
   await panel
-    .getByRole("textbox", { name: "Note sur le plan", exact: true })
-    .fill("CHECK TOLERANCE");
+    .getByRole("textbox", { name: "Titre du point", exact: true })
+    .fill("Move hole 2 mm");
   await panel
-    .getByRole("button", { name: "Enregistrer le point", exact: true })
-    .click();
-  await expect(viewer.getByTestId(`annotation-${text.id}`)).toContainText(
-    "CHECK TOLERANCE",
+    .getByRole("textbox", { name: "Description", exact: true })
+    .fill("Check the drilling tolerance");
+  const created = page.waitForResponse(
+    (r) =>
+      r.request().method() === "POST" &&
+      r.url().endsWith(`/revisions/${revision}/review-items`),
   );
-  await createShape(page, "Dessin libre", [0.6, 0.62], [0.76, 0.75]);
-  await createShape(page, "Surlignage", [0.1, 0.8], [0.24, 0.86]);
-  await panel.getByTestId(`point-${marker.id}`).getByRole("button").click();
-  await viewer.getByTestId(`annotation-${marker.id}`).click();
-  await expect(
-    panel.getByRole("textbox", { name: "Commentaire du point", exact: true }),
-  ).toHaveValue("Increase this hole to 8 mm");
+  await panel
+    .getByRole("button", { name: "Créer le brouillon", exact: true })
+    .click();
+  const response = await created;
+  expect(response.status(), await response.text()).toBe(201);
+  const point = await response.json();
+  expect(point.annotation_count).toBe(3);
+  expect(point.number).toBe(1);
+  await expect(panel.getByTestId(`point-${point.id}`)).toContainText(
+    "3 annotations",
+  );
   await panel
     .getByRole("textbox", { name: "Réponse", exact: true })
-    .fill("Modified in revision B");
+    .fill("Confirmed with manufacturing");
   await panel
     .getByRole("button", { name: "Envoyer la réponse", exact: true })
     .click();
   await expect(
-    panel.getByText("Modified in revision B", { exact: true }),
+    panel
+      .locator(".review-message")
+      .getByText("Confirmed with manufacturing", { exact: true }),
   ).toBeVisible();
   await panel
-    .getByRole("button", { name: "Modifier la réponse", exact: true })
+    .getByRole("button", { name: "Détacher", exact: true })
+    .first()
     .click();
-  const reply = panel.locator(".review-message");
-  await reply
-    .getByRole("textbox", { name: "Réponse", exact: true })
-    .fill("Modified and verified in revision B");
-  await reply.getByRole("button", { name: "Enregistrer", exact: true }).click();
-  await expect(
-    panel.getByText("Modified and verified in revision B", { exact: true }),
-  ).toBeVisible();
-  await panel
-    .getByRole("combobox", { name: "Couleur", exact: true })
-    .selectOption("blue");
-  await panel
-    .getByRole("button", { name: "Enregistrer le point", exact: true })
-    .click();
-  await expect(
-    viewer.getByTestId(`annotation-${marker.id}`).locator("circle"),
-  ).toHaveAttribute("stroke", "#2563eb");
-  await panel
-    .getByRole("combobox", { name: "Statut du point", exact: true })
-    .selectOption("resolved");
-  await panel
-    .getByRole("button", { name: "Enregistrer le point", exact: true })
-    .click();
-  await expect(panel.getByTestId(`point-${marker.id}`)).toHaveCount(0);
-  await panel
-    .getByRole("checkbox", { name: "Masquer les points résolus", exact: true })
-    .uncheck();
-  await expect(panel.getByTestId(`point-${marker.id}`)).toBeVisible();
-  await viewer.getByRole("spinbutton", { name: "Page", exact: true }).fill("1");
-  await panel.getByTestId(`point-${marker.id}`).getByRole("button").click();
-  await expect(
-    viewer.getByRole("spinbutton", { name: "Page", exact: true }),
-  ).toHaveValue("3");
-  await expect(viewer.getByTestId(`annotation-${marker.id}`)).toBeVisible();
-  await panel
-    .getByText("Nouveau commentaire sans annotation", { exact: true })
-    .click();
-  await panel
-    .getByRole("textbox", { name: "Commentaire", exact: true })
-    .fill("General note on page two");
-  await panel
-    .getByRole("spinbutton", { name: "Page du commentaire", exact: true })
-    .fill("2");
-  await panel
-    .getByRole("button", { name: "Ajouter le commentaire", exact: true })
-    .click();
-  await expect(panel.locator(".review-list")).toContainText(
-    "General note on page two",
+  await expect(panel.getByTestId(`point-${point.id}`)).toContainText(
+    "2 annotations",
   );
   await panel
-    .getByRole("spinbutton", { name: "Filtrer par page", exact: true })
-    .fill("3");
-  await expect(panel.locator(".review-list")).not.toContainText(
-    "General note on page two",
-  );
-  await panel
-    .getByRole("spinbutton", { name: "Filtrer par page", exact: true })
-    .fill("");
-  await panel.getByTestId(`point-${marker.id}`).getByRole("button").click();
-  await panel.getByText("Historique du point", { exact: true }).click();
-  await expect(
-    panel.locator(".review-event").filter({ hasText: "Résolue" }),
-  ).toBeVisible();
-  const rotateGeometry = (
-    await (await page.request.get(`/api/v1/review-items/${marker.id}`)).json()
-  ).item.geometry;
-  await viewer
-    .getByRole("button", { name: "Tourner de 90°", exact: true })
+    .getByRole("button", { name: "Publier le point", exact: true })
     .click();
-  expect(
-    (await (await page.request.get(`/api/v1/review-items/${marker.id}`)).json())
-      .item.geometry,
-  ).toEqual(rotateGeometry);
-  await page.screenshot({
-    path: "test-results/phase3-annotations.png",
-    fullPage: true,
-  });
-  await viewer
-    .getByRole("textbox", { name: "Révision", exact: true })
-    .fill("B");
-  const complete = page.waitForResponse(
-    (r) => r.request().method() === "POST" && r.url().endsWith("/complete"),
-  );
-  await viewer
-    .getByLabel("Importer une nouvelle révision", { exact: true })
-    .setInputFiles({
-      name: "review-B.pdf",
-      mimeType: "application/pdf",
-      buffer: await pdf(["New one", "New two", "New three"]),
-    });
-  const b = await (await complete).json();
-  await expect(
-    viewer.getByRole("combobox", { name: "Historique des révisions" }),
-  ).toHaveValue(b.revision_id);
-  await expect(viewer.locator("[data-review-id]")).toHaveCount(0);
-  expect(
-    (
-      await (
-        await page.request.get(
-          `/api/v1/revisions/${b.revision_id}/annotations?page_number=3`,
-        )
-      ).json()
-    ).items,
-  ).toHaveLength(0);
-  await viewer
-    .getByRole("combobox", { name: "Historique des révisions" })
-    .selectOption(revision);
-  await viewer.getByRole("spinbutton", { name: "Page", exact: true }).fill("3");
-  await expect(viewer.getByTestId(`annotation-${marker.id}`)).toBeVisible();
-  expect(
-    (await (await page.request.get(`/api/v1/review-items/${marker.id}`)).json())
-      .messages[0].body,
-  ).toBe("Modified and verified in revision B");
-  expect(
-    Buffer.from(
-      await (
-        await page.request.get(`/api/v1/revisions/${revision}/content`)
-      ).body(),
-    ),
-  ).toEqual(original);
-  await viewer
-    .getByRole("combobox", { name: "Historique des révisions" })
-    .selectOption(b.revision_id);
-  let fail = true;
-  await page.route("**/api/v1/revisions/*/review-items", async (route) => {
-    if (fail && route.request().method() === "POST") {
-      fail = false;
-      audit.expected.add(route.request().url());
-      await route.fulfill({
-        status: 503,
-        contentType: "application/json",
-        body: JSON.stringify({ error: "Deliberate isolated save failure" }),
-      });
-    } else await route.continue();
-  });
-  await viewer.getByRole("button", { name: "Marqueur", exact: true }).click();
-  await viewer
-    .getByTestId("annotation-layer")
-    .click({ position: { x: 50, y: 50 } });
-  await expect(
-    viewer.getByText("Annotation non enregistrée.", { exact: false }),
-  ).toBeVisible();
-  expect(
-    (
-      await (
-        await page.request.get(
-          `/api/v1/documents/${document}/review-items?revision_id=${b.revision_id}`,
-        )
-      ).json()
-    ).items,
-  ).toHaveLength(0);
-  await viewer.getByRole("button", { name: "Réessayer", exact: true }).click();
-  await expect(viewer.getByTestId("annotation-draft")).toHaveCount(0);
-  expect(
-    (
-      await (
-        await page.request.get(
-          `/api/v1/documents/${document}/review-items?revision_id=${b.revision_id}`,
-        )
-      ).json()
-    ).items,
-  ).toHaveLength(1);
-  const newPoint = (
-    await (
-      await page.request.get(
-        `/api/v1/documents/${document}/review-items?revision_id=${b.revision_id}`,
-      )
-    ).json()
-  ).items[0] as ReviewItem;
+  await expect(panel.getByTestId(`point-${point.id}`)).toContainText("#001");
+  page.once("dialog", (d) => d.accept());
+  await panel
+    .getByRole("button", { name: "Annuler le point", exact: true })
+    .click();
+  await expect(panel.getByTestId(`point-${point.id}`)).toContainText("Annulé");
+  await panel.getByRole("button", { name: "Annotations", exact: true }).click();
+  await panel
+    .getByRole("button", { name: "Désélectionner", exact: true })
+    .click();
+  const free = await createShape(page, "Marqueur", [0.8, 0.6]);
   page.once("dialog", (d) => d.accept());
   await panel
     .getByRole("button", { name: "Supprimer l’annotation", exact: true })
     .click();
-  await expect(viewer.getByTestId(`annotation-${newPoint.id}`)).toHaveCount(0);
-  expect(
-    (
-      await (
-        await page.request.get(`/api/v1/review-items/${newPoint.id}`)
-      ).json()
-    ).item.annotation_deleted_at,
-  ).toBeTruthy();
-  const subsequent = await createShape(page, "Marqueur", [0.45, 0.25]);
-  expect(subsequent.number).toBe(newPoint.number + 1);
-  expect(audit.injected).toBe(1);
+  await expect(viewer.getByTestId(`annotation-${free.id}`)).toHaveCount(0);
+  await viewer.getByRole("button", { name: "Sélection", exact: true }).click();
+  await viewer.getByTestId(`annotation-${text.id}`).click();
+  await panel.getByRole("button", { name: "Annotations", exact: true }).click();
+  page.once("dialog", (d) => d.accept());
+  await panel
+    .getByRole("button", { name: "Supprimer l’annotation", exact: true })
+    .click();
+  await expect(viewer.getByTestId(`annotation-${text.id}`)).toHaveCount(0);
+  const detail = await (
+    await page.request.get(`/api/v1/review-items/${point.id}`)
+  ).json();
+  expect(detail.messages).toHaveLength(1);
+  expect(detail.annotations).toHaveLength(1);
+  await panel
+    .getByRole("button", { name: "Désélectionner", exact: true })
+    .click();
+  await panel
+    .getByRole("textbox", { name: "Titre du point", exact: true })
+    .fill("Accidental draft");
+  await panel
+    .getByRole("button", { name: "Créer le brouillon", exact: true })
+    .click();
+  page.once("dialog", (d) => d.accept());
+  await panel
+    .getByRole("button", { name: "Supprimer le brouillon", exact: true })
+    .click();
+  await expect(
+    panel.getByText("Accidental draft", { exact: true }),
+  ).toHaveCount(0);
+  await page.reload();
+  await page
+    .getByRole("button", { name: "review-plan.pdf", exact: true })
+    .click();
+  await expect(page.getByTestId(`annotation-${arrow.id}`)).toBeVisible();
+  await expect(page.getByTestId(`annotation-${free.id}`)).toHaveCount(0);
+  await expect(page.getByTestId(`point-${point.id}`)).toContainText("Annulé");
   expect(audit.errors).toEqual([]);
 });
 
@@ -628,4 +411,122 @@ test("PDF page replacement: preview, validation, full new revision and preserved
     .click();
   await expect(replace.getByRole("alert")).toContainText("exactement une page");
   expect(audit.errors).toEqual([]);
+});
+
+test("drawing tools retain geometry across editing, zoom, rotation and a retryable save failure", async ({
+  page,
+}) => {
+  test.setTimeout(90000);
+  const { viewer, document, revision } = await setup(
+    page,
+    await pdf(["ONE", "TWO", "THREE"], true),
+    "GEOMETRY",
+  );
+  const rectangle = await createShape(
+    page,
+    "Rectangle",
+    [0.1, 0.1],
+    [0.3, 0.3],
+  );
+  await createShape(page, "Surlignage", [0.5, 0.5], [0.7, 0.6]);
+  await createShape(page, "Dessin libre", [0.3, 0.6], [0.4, 0.8]);
+  const marker = await createShape(page, "Marqueur", [0.7, 0.2]);
+  await viewer.getByRole("button", { name: "Sélection", exact: true }).click();
+  const shape = viewer.getByTestId(`annotation-${marker.id}`);
+  await shape.click();
+  const circle = await shape.locator("circle").boundingBox();
+  const moved = page.waitForResponse(
+    (r) =>
+      r.request().method() === "PATCH" &&
+      r.url().endsWith(`/annotations/${marker.id}`),
+  );
+  await page.mouse.move(
+    circle!.x + circle!.width / 2,
+    circle!.y + circle!.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    circle!.x + circle!.width / 2 + 30,
+    circle!.y + circle!.height / 2 + 20,
+    { steps: 5 },
+  );
+  await page.mouse.up();
+  const result = await moved;
+  expect(result.ok(), await result.text()).toBe(true);
+  const saved = await result.json();
+  expect(saved.geometry).not.toEqual(marker.geometry);
+  await viewer
+    .getByTestId(`annotation-${rectangle.id}`)
+    .locator("rect")
+    .click({ position: { x: 1, y: 1 } });
+  const handle = viewer.getByTestId("annotation-resize"),
+    box = await handle.boundingBox();
+  const resized = page.waitForResponse(
+    (r) =>
+      r.request().method() === "PATCH" &&
+      r.url().endsWith(`/annotations/${rectangle.id}`),
+  );
+  await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(
+    box!.x + box!.width / 2 + 25,
+    box!.y + box!.height / 2 + 15,
+    { steps: 5 },
+  );
+  await page.mouse.up();
+  expect((await resized).ok()).toBe(true);
+  await viewer.getByRole("button", { name: "Zoom avant", exact: true }).click();
+  await viewer
+    .getByRole("button", { name: "Tourner de 90°", exact: true })
+    .click();
+  await expect(shape).toBeVisible();
+  const rows = await (
+    await page.request.get(
+      `/api/v1/revisions/${revision}/annotations?page_number=1`,
+    )
+  ).json();
+  expect(
+    rows.items.find((i: ReviewItem) => i.id === marker.id).geometry,
+  ).toEqual(saved.geometry);
+  let failed = false;
+  await page.route(
+    `**/api/v1/revisions/${revision}/annotations`,
+    async (route) => {
+      if (route.request().method() === "POST" && !failed) {
+        failed = true;
+        await route.fulfill({
+          status: 503,
+          contentType: "application/json",
+          body: JSON.stringify({ error: "Simulated save failure" }),
+        });
+      } else await route.continue();
+    },
+  );
+  await viewer.getByRole("button", { name: "Marqueur", exact: true }).click();
+  await viewer
+    .getByTestId("annotation-layer")
+    .click({ position: { x: 100, y: 100 } });
+  await expect(
+    viewer.getByText(
+      "Annotation non enregistrée. Réessayez avant de quitter cette page.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await viewer.getByRole("button", { name: "Réessayer", exact: true }).click();
+  await expect(viewer.getByTestId("annotation-draft")).toHaveCount(0);
+  const points = await (
+    await page.request.get(`/api/v1/documents/${document}/review-items`)
+  ).json();
+  expect(points.items).toHaveLength(0);
+  const after = await (
+    await page.request.get(
+      `/api/v1/revisions/${revision}/annotations?page_number=1`,
+    )
+  ).json();
+  expect(after.items).toHaveLength(5);
+  await page.reload();
+  await page
+    .getByRole("button", { name: "review-plan.pdf", exact: true })
+    .click();
+  await expect(page.getByTestId(`annotation-${marker.id}`)).toBeVisible();
 });

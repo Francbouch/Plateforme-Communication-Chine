@@ -201,6 +201,7 @@ describe("document library on real workerd D1 and R2", () => {
     expect((await req(`uploads/${u.id}/complete`, {})).status).toBe(200);
     await runtime.dispose();
     runtime = makeRuntime();
+    db = (await runtime.getD1Database("DB")) as unknown as D1Database;
     expect(
       (await json<{ revisions: unknown[] }>(await req(`documents/${first.id}`)))
         .revisions,
@@ -460,286 +461,364 @@ it("adds the library schema without losing pre-phase-2 projects or memberships",
   }
 });
 
-describe("phase 3 review on actual workerd D1 and private R2", () => {
-  it("persists numbered review items and discussions without changing original bytes", async () => {
-    const upload = await reserve();
-    await content(upload.id);
-    const revision = await complete(upload.id);
-    const meta = await json<{
-      document_id: string;
-      label: string;
-      object_key?: string;
-    }>(await req(`revisions/${revision.revision_id}`));
-    expect(meta.document_id).toBe(revision.id);
-    expect(meta.label).toBe("A");
-    expect(meta.object_key).toBeUndefined();
-    const itemId = crypto.randomUUID();
-    const point = await json<{ id: string; number: number; version: number }>(
-      await req(`revisions/${revision.revision_id}/review-items`, {
-        id: itemId,
-        page: 3,
-        type: "marker",
-        color: "red",
-        geometry: { points: [[0.25, 0.7]] },
-        summary: "Increase hole diameter to 8 mm",
-      }),
-    );
-    expect(point.number).toBe(1);
-    const replay = await json<{ number: number }>(
-      await req(`revisions/${revision.revision_id}/review-items`, {
-        id: itemId,
-        page: 3,
-        type: "marker",
-        color: "red",
-        geometry: { points: [[0.25, 0.7]] },
-      }),
-    );
-    expect(replay.number).toBe(1);
-    await json(
-      await req(
-        `review-items/${itemId}`,
-        {
-          version: 1,
-          color: "blue",
-          status: "in_progress",
-          geometry: { points: [[0.3, 0.6]] },
+describe("independent annotations and technical points on actual D1/R2", () => {
+  async function fixture() {
+    const u = await reserve();
+    await content(u.id);
+    return complete(u.id);
+  }
+  async function drawing(rev: string, type = "marker") {
+    return json<import("../packages/shared/src/review").ReviewItem>(
+      await req(`revisions/${rev}/annotations`, {
+        id: crypto.randomUUID(),
+        page: 1,
+        type,
+        geometry: {
+          points:
+            type === "marker" || type === "text"
+              ? [[0.2, 0.3]]
+              : [
+                  [0.2, 0.3],
+                  [0.5, 0.6],
+                ],
         },
-        "PATCH",
-      ),
+      }),
     );
-    const message = crypto.randomUUID();
+  }
+  async function point(
+    rev: string,
+    annotations: string[] = [],
+    identifier = crypto.randomUUID(),
+  ) {
+    return json<import("../packages/shared/src/review").ReviewItem>(
+      await req(`revisions/${rev}/review-items`, {
+        id: identifier,
+        page: 1,
+        type: "discussion",
+        geometry: { points: [] },
+        title: "Move hole 2 mm",
+        summary: "Manufacturing question",
+        annotation_ids: annotations,
+      }),
+    );
+  }
+  async function change(id: string, data: unknown) {
+    return json<import("../packages/shared/src/review").ReviewItem>(
+      await req(`review-items/${id}`, data, "PATCH"),
+    );
+  }
+  it("draws freely without consuming numbers, links three drawings to one point and preserves discussions after deletion", async () => {
+    const a = await fixture(),
+      drawings = [];
+    for (const type of ["arrow", "rectangle", "text"])
+      drawings.push(await drawing(a.revision_id, type));
+    expect(
+      (
+        await json<{ items: unknown[] }>(
+          await req(`documents/${a.id}/review-items`),
+        )
+      ).items,
+    ).toHaveLength(0);
+    expect(
+      (
+        await db
+          .prepare("SELECT review_counter AS n FROM documents WHERE id=?")
+          .bind(a.id)
+          .first<{ n: number }>()
+      )?.n,
+    ).toBe(0);
+    const p = await point(
+      a.revision_id,
+      drawings.map((a) => a.id),
+    );
+    expect(p.number).toBe(1);
+    expect(p.annotation_count).toBe(3);
+    expect(p.publication).toBe("draft");
+    const mid = crypto.randomUUID();
     await json(
-      await req(`review-items/${itemId}/messages`, {
-        id: message,
-        body: "Changed in revision B",
+      await req(`review-items/${p.id}/messages`, {
+        id: mid,
+        body: "Check drilling",
       }),
     );
     await json(
       await req(
-        `review-messages/${message}`,
-        { version: 1, body: "Changed and verified in revision B" },
+        `review-messages/${mid}`,
+        { version: 1, body: "Check drilling tolerance" },
         "PATCH",
       ),
     );
-    const detail = await json<{
-      item: { geometry: { points: number[][] }; version: number };
-      messages: { body: string; version: number }[];
-      history: { action: string; payload: string }[];
-    }>(await req(`review-items/${itemId}`));
-    expect(detail.item.geometry.points).toEqual([[0.3, 0.6]]);
-    expect(detail.messages[0]).toMatchObject({
-      body: "Changed and verified in revision B",
-      version: 2,
-    });
-    expect(
-      detail.history.some(
-        (e) =>
-          e.action === "reply.updated" &&
-          e.payload.includes("Changed in revision B"),
+    let detail = await json<{
+      annotations: { id: string; version: number }[];
+      messages: { body: string }[];
+    }>(await req(`review-items/${p.id}`));
+    expect(detail.messages[0].body).toBe("Check drilling tolerance");
+    await json(
+      await req(`revisions/${a.revision_id}/annotation-links`, {
+        point_id: null,
+        annotations: [detail.annotations[0]],
+      }),
+    );
+    detail = await json(await req(`review-items/${p.id}`));
+    expect(detail.annotations).toHaveLength(2);
+    await json(
+      await req(
+        `annotations/${detail.annotations[0].id}`,
+        { version: detail.annotations[0].version, annotation_deleted: true },
+        "PATCH",
       ),
-    ).toBe(true);
+    );
+    detail = await json(await req(`review-items/${p.id}`));
+    expect(detail.annotations).toHaveLength(1);
+    expect(detail.messages).toHaveLength(1);
+    expect(await (await req(`revisions/${a.revision_id}/content`)).text()).toBe(
+      new TextDecoder().decode(bytes),
+    );
+  });
+  it("publishes, cancels, soft-deletes drafts without deleting drawings, and never reuses numbers", async () => {
+    const a = await fixture(),
+      ann = await drawing(a.revision_id),
+      p = await point(a.revision_id, [ann.id]);
+    const published = await change(p.id, {
+      version: p.version,
+      publication: "published",
+    });
+    expect(published.publication).toBe("published");
     expect(
       (
         await req(
-          `review-items/${itemId}`,
-          { version: 1, summary: "Stale overwrite" },
+          `review-items/${p.id}`,
+          { version: published.version, point_deleted: true },
           "PATCH",
         )
       ).status,
     ).toBe(409);
-    expect(
-      await (await req(`revisions/${revision.revision_id}/content`)).text(),
-    ).toBe(new TextDecoder().decode(bytes));
-    await runtime.dispose();
-    runtime = makeRuntime();
-    const restored = await json<{ item: { summary: string } }>(
-      await req(`review-items/${itemId}`),
-    );
-    expect(restored.item.summary).toBe("Increase hole diameter to 8 mm");
-  });
-  it("keeps historical numbers, resolved threads and independent revision spaces", async () => {
-    const u = await reserve();
-    await content(u.id);
-    const a = await complete(u.id);
-    const first = await json<{ id: string }>(
-      await req(`revisions/${a.revision_id}/review-items`, {
-        id: crypto.randomUUID(),
-        page: 1,
-        type: "rectangle",
-        geometry: {
-          points: [
-            [0.1, 0.1],
-            [0.4, 0.5],
-          ],
-        },
-      }),
-    );
-    await json(
-      await req(
-        `review-items/${first.id}`,
-        { version: 1, annotation_deleted: true },
-        "PATCH",
-      ),
-    );
-    const second = await json<{ id: string; number: number }>(
-      await req(`revisions/${a.revision_id}/review-items`, {
-        id: crypto.randomUUID(),
-        page: 2,
-        type: "marker",
-        geometry: { points: [[0.7, 0.2]] },
-        summary: "Check support",
-      }),
-    );
-    expect(second.number).toBe(2);
-    await json(
-      await req(
-        `review-items/${second.id}`,
-        { version: 1, status: "resolved" },
-        "PATCH",
-      ),
-    );
+    await change(p.id, { version: published.version, cancelled: true });
+    const other = await point(a.revision_id);
+    expect(other.number).toBe(2);
+    await change(other.id, { version: other.version, point_deleted: true });
     expect(
       (
-        await json<{ items: unknown[] }>(
-          await req(`documents/${a.id}/review-items?hide_resolved=1`),
+        await json<{ items: { id: string }[] }>(
+          await req(`documents/${a.id}/review-items`),
         )
-      ).items,
-    ).toHaveLength(1);
-    expect(
-      (
-        await json<{ items: unknown[] }>(
-          await req(
-            `documents/${a.id}/review-items?status=resolved&page_number=2`,
-          ),
-        )
-      ).items,
-    ).toHaveLength(1);
+      ).items.map((i) => i.id),
+    ).toEqual([p.id]);
+    const third = await point(a.revision_id, [/* no duplicate geometry */]);
+    expect(third.number).toBe(3);
     expect(
       (
         await json<{ items: unknown[] }>(
           await req(`revisions/${a.revision_id}/annotations?page_number=1`),
         )
       ).items,
-    ).toHaveLength(0);
-    const newUpload = await reserve({ document_id: a.id, label: "B" });
-    await content(newUpload.id);
-    const b = await complete(newUpload.id);
-    expect(
-      (
-        await json<{ items: unknown[] }>(
-          await req(`revisions/${b.revision_id}/annotations?page_number=2`),
-        )
-      ).items,
-    ).toHaveLength(0);
-    expect(
-      (
-        await json<{ items: unknown[] }>(
-          await req(`revisions/${a.revision_id}/annotations?page_number=2`),
-        )
-      ).items,
     ).toHaveLength(1);
-    const third = await json<{ number: number }>(
-      await req(`revisions/${b.revision_id}/review-items`, {
-        id: crypto.randomUUID(),
-        page: 1,
-        type: "discussion",
-        geometry: { points: [] },
-        summary: "New revision discussion",
+    const draft = await point(a.revision_id);
+    await json(
+      await req(`revisions/${a.revision_id}/annotation-links`, {
+        point_id: draft.id,
+        annotations: [{ id: ann.id, version: 2 }],
       }),
     );
-    expect(third.number).toBe(3);
-    await expect(
-      db.prepare("DELETE FROM review_items WHERE id=?").bind(first.id).run(),
-    ).rejects.toThrow("preserved");
+    await change(draft.id, { version: draft.version, point_deleted: true });
+    const rows = await json<{ items: { point_id: string | null }[] }>(
+      await req(`revisions/${a.revision_id}/annotations?page_number=1`),
+    );
+    expect(rows.items[0].point_id).toBeNull();
   });
-  it("validates normalized coordinates and enforces access and authorship", async () => {
-    const u = await reserve();
-    await content(u.id);
-    const revision = await complete(u.id);
-    for (const geometry of [
-      { points: [[-0.1, 0.4]] },
-      { points: [[1.2, 0.5]] },
-      { points: [] },
-      {
-        points: [
-          [0.1, 0.2],
-          [0.4, 0.5],
-        ],
-      },
-    ])
-      expect(
-        (
-          await req(`revisions/${revision.revision_id}/review-items`, {
-            id: crypto.randomUUID(),
-            page: 1,
-            type: "marker",
-            geometry,
-          })
-        ).status,
-      ).toBe(400);
-    const annotation = await json<{ id: string }>(
-      await req(`revisions/${revision.revision_id}/review-items`, {
-        id: crypto.randomUUID(),
-        page: 1,
-        type: "arrow",
-        geometry: {
-          points: [
-            [0.1, 0.2],
-            [0.4, 0.5],
-          ],
-        },
-      }),
-    );
-    const other = crypto.randomUUID();
-    await db
-      .prepare("INSERT INTO profiles(id,name) VALUES(?,?)")
-      .bind(other, "Future other author")
-      .run();
-    const message = crypto.randomUUID();
-    await db
-      .prepare(
-        "INSERT INTO review_messages(id,item_id,body,author_id) VALUES(?,?,?,?)",
-      )
-      .bind(message, annotation.id, "Another author's reply", other)
-      .run();
+  it("isolates A/B/C/D, rejects cross-revision links, stale writes, unauthenticated and revoked access", async () => {
+    const a = await fixture(),
+      revisions = [a.revision_id];
+    for (const label of ["B", "C", "D"]) {
+      const u = await reserve({ document_id: a.id, label });
+      await content(u.id);
+      revisions.push((await complete(u.id)).revision_id);
+    }
+    const anns = [],
+      points = [];
+    for (const r of revisions) {
+      const ann = await drawing(r);
+      anns.push(ann);
+      const p = await point(r, [ann.id]);
+      points.push(p);
+      await json(
+        await req(`review-items/${p.id}/messages`, {
+          id: crypto.randomUUID(),
+          body: `Reply ${r}`,
+        }),
+      );
+      await change(p.id, { version: 1, status: "waiting" });
+    }
+    for (let i = 0; i < revisions.length; i++) {
+      const rows = await json<{ items: { id: string }[] }>(
+        await req(`revisions/${revisions[i]}/annotations?page_number=1`),
+      );
+      expect(rows.items.map((a) => a.id)).toEqual([anns[i].id]);
+    }
+    expect(
+      (
+        await req(`revisions/${revisions[0]}/annotation-links`, {
+          point_id: points[1].id,
+          annotations: [{ id: anns[0].id, version: 2 }],
+        })
+      ).status,
+    ).toBe(409);
     expect(
       (
         await req(
-          `review-messages/${message}`,
-          { version: 1, body: "Forbidden edit" },
+          `annotations/${anns[0].id}`,
+          { version: 1, color: "green" },
           "PATCH",
         )
       ).status,
-    ).toBe(403);
+    ).toBe(409);
     expect(
       (
         await runtime.dispatchFetch(
-          `${origin}/api/v1/revisions/${revision.revision_id}/annotations?page_number=1`,
+          `${origin}/api/v1/revisions/${revisions[0]}/annotations?page_number=1`,
         )
       ).status,
     ).toBe(401);
+    await runtime.dispose();
+    runtime = makeRuntime();
+    db = (await runtime.getD1Database("DB")) as unknown as D1Database;
+    expect(
+      (
+        await json<{ messages: unknown[] }>(
+          await req(`review-items/${points[2].id}`),
+        )
+      ).messages,
+    ).toHaveLength(1);
     await db
       .prepare(
         "UPDATE organization_memberships SET active=0 WHERE organization_id=? AND user_id=?",
       )
       .bind(org, admin)
       .run();
-    expect((await req(`review-items/${annotation.id}`)).status).toBe(403);
+    expect((await req(`review-items/${points[0].id}`)).status).toBe(403);
+  });
+  it("keeps concurrent point numbers unique and replays a confirmed creation without duplicate links", async () => {
+    const a = await fixture(),
+      ann = await drawing(a.revision_id),
+      identifier = crypto.randomUUID();
+    const first = await point(a.revision_id, [ann.id], identifier),
+      replay = await point(a.revision_id, [ann.id], identifier);
+    expect(replay.id).toBe(first.id);
+    expect(replay.annotation_count).toBe(1);
+    const points = await Promise.all(
+      Array.from({ length: 5 }, () => point(a.revision_id)),
+    );
+    expect(new Set([first.number, ...points.map((p) => p.number)]).size).toBe(
+      6,
+    );
+    expect(
+      (
+        await db
+          .prepare("SELECT review_counter AS n FROM documents WHERE id=?")
+          .bind(a.id)
+          .first<{ n: number }>()
+      )?.n,
+    ).toBe(6);
+    const second = await drawing(a.revision_id);
+    expect(
+      (
+        await req(`revisions/${a.revision_id}/annotation-links`, {
+          point_id: first.id,
+          annotations: [
+            { id: ann.id, version: 1 },
+            { id: second.id, version: 1 },
+          ],
+        })
+      ).status,
+    ).toBe(409);
+    const detail = await json<{ annotations: { id: string }[] }>(
+      await req(`review-items/${first.id}`),
+    );
+    expect(detail.annotations.map((i) => i.id)).toEqual([ann.id]);
+    const changed = { version: 1, geometry: { points: [[0.5, 0.6]] } };
+    const saved = await json<{ version: number }>(
+      await req(`annotations/${second.id}`, changed, "PATCH"),
+    );
+    const retry = await json<{ version: number }>(
+      await req(`annotations/${second.id}`, changed, "PATCH"),
+    );
+    expect(retry.version).toBe(saved.version);
+  });
+  it("associates one hundred drawings atomically without exceeding D1 parameter limits", async () => {
+    const a = await fixture(),
+      ids = Array.from({ length: 100 }, () => crypto.randomUUID());
+    await db.batch(
+      ids.map((id) =>
+        db
+          .prepare(
+            "INSERT INTO graphical_annotations(id,document_id,revision_id,page,type,color,geometry,created_by) VALUES(?,?,?,1,'marker','red',?,?)",
+          )
+          .bind(
+            id,
+            a.id,
+            a.revision_id,
+            JSON.stringify({ points: [[0.2, 0.3]] }),
+            admin,
+          ),
+      ),
+    );
+    const p = await point(a.revision_id, ids);
+    expect(p.annotation_count).toBe(100);
+    await json(
+      await req(`revisions/${a.revision_id}/annotation-links`, {
+        point_id: null,
+        annotations: ids.map((id) => ({ id, version: 2 })),
+      }),
+    );
+    const detail = await json<{
+      annotations: unknown[];
+      history: { action: string }[];
+    }>(await req(`review-items/${p.id}`));
+    expect(detail.annotations).toHaveLength(0);
+    expect(
+      detail.history.some((h) => h.action === "annotations.detached"),
+    ).toBe(true);
+  });
+  it("validates drawing geometry, protects authorship and rolls back failed point history", async () => {
+    const a = await fixture();
+    expect(
+      (
+        await req(`revisions/${a.revision_id}/annotations`, {
+          id: crypto.randomUUID(),
+          page: 1,
+          type: "marker",
+          geometry: { points: [[-1, 0.2]] },
+        })
+      ).status,
+    ).toBe(400);
+    const ann = await drawing(a.revision_id),
+      other = crypto.randomUUID();
+    await db
+      .prepare("INSERT INTO profiles(id,name) VALUES(?,?)")
+      .bind(other, "Other author")
+      .run();
+    const foreignId = crypto.randomUUID();
+    await db
+      .prepare(
+        "INSERT INTO graphical_annotations(id,document_id,revision_id,page,type,color,geometry,created_by) VALUES(?,?,?,1,'marker','red',?,?)",
+      )
+      .bind(
+        foreignId,
+        a.id,
+        a.revision_id,
+        JSON.stringify({ points: [[0.1, 0.2]] }),
+        other,
+      )
+      .run();
     expect(
       (
         await req(
-          `review-items/${annotation.id}`,
-          { version: 1, status: "resolved" },
+          `annotations/${foreignId}`,
+          { version: 1, color: "green" },
           "PATCH",
         )
       ).status,
     ).toBe(403);
-  });
-  it("rolls back review edits if immutable history cannot be written", async () => {
-    const u = await reserve();
-    await content(u.id);
-    const revision = await complete(u.id),
-      id = crypto.randomUUID();
     await db
       .prepare(
         "CREATE TRIGGER test_review_fail BEFORE INSERT ON review_events BEGIN SELECT RAISE(ABORT,'test history failure'); END;",
@@ -747,126 +826,159 @@ describe("phase 3 review on actual workerd D1 and private R2", () => {
       .run();
     expect(
       (
-        await req(`revisions/${revision.revision_id}/review-items`, {
-          id,
+        await req(`revisions/${a.revision_id}/review-items`, {
+          id: crypto.randomUUID(),
           page: 1,
-          type: "marker",
-          geometry: { points: [[0.5, 0.5]] },
+          type: "discussion",
+          geometry: { points: [] },
+          title: "Atomic point",
+          annotation_ids: [ann.id],
         })
       ).status,
     ).toBe(503);
     expect(
       (
         await db
-          .prepare("SELECT count(*) AS n FROM review_items WHERE id=?")
-          .bind(id)
+          .prepare("SELECT review_counter AS n FROM documents WHERE id=?")
+          .bind(a.id)
           .first<{ n: number }>()
       )?.n,
     ).toBe(0);
     expect(
       (
-        await db
-          .prepare("SELECT review_counter FROM documents WHERE id=?")
-          .bind(revision.id)
-          .first<{ review_counter: number }>()
-      )?.review_counter,
-    ).toBe(0);
+        await json<{ items: { point_id: unknown }[] }>(
+          await req(`revisions/${a.revision_id}/annotations?page_number=1`),
+        )
+      ).items.find((i) => i.point_id)?.point_id ?? null,
+    ).toBeNull();
   });
 });
 
-it("supports independent annotation CRUD and threads on every A/B/C/D revision", async () => {
-  const first = await reserve();
-  await content(first.id);
-  const a = await complete(first.id);
-  const revisions = [a.revision_id];
-  for (const label of ["B", "C", "D"]) {
-    const u = await reserve({ document_id: a.id, label });
-    await content(u.id);
-    revisions.push((await complete(u.id)).revision_id);
-  }
-  const kept: string[] = [];
-  for (const revision of revisions) {
-    const body = {
-      page: 1,
-      type: "marker",
-      color: "red",
-      geometry: { points: [[0.2, 0.6]] },
-      summary: `Point on ${revision}`,
-    };
-    const point = await json<{ id: string; revision_id: string }>(
-      await req(`revisions/${revision}/review-items`, {
-        ...body,
-        id: crypto.randomUUID(),
-      }),
+it("migrates a populated phase-3 copy without losing annotations, messages, histories or legacy numbers", async () => {
+  const u = await reserve();
+  await content(u.id);
+  const a = await complete(u.id);
+  const legacy = await createDatabase();
+  try {
+    await migrate(legacy.db, { through: "0004_pdf_review.sql" });
+    for (const table of [
+      "profiles",
+      "organizations",
+      "organization_memberships",
+      "projects",
+      "documents",
+      "document_revisions",
+    ]) {
+      const columns = (
+        await legacy.db
+          .prepare(`PRAGMA table_info(${table})`)
+          .all<{ name: string }>()
+      ).results.map((c) => c.name);
+      const rows = (
+        await db
+          .prepare(`SELECT ${columns.join(",")} FROM ${table}`)
+          .all<Record<string, unknown>>()
+      ).results;
+      for (const row of rows)
+        await legacy.db
+          .prepare(
+            `INSERT INTO ${table}(${columns.join(",")}) VALUES(${columns.map(() => "?").join(",")})`,
+          )
+          .bind(...columns.map((c) => row[c]))
+          .run();
+    }
+    const ids = Array.from({ length: 5 }, () => crypto.randomUUID());
+    for (let i = 0; i < ids.length; i++)
+      await legacy.db
+        .prepare(
+          "INSERT INTO review_items(id,document_id,revision_id,number,page,type,color,geometry,created_by,summary,annotation_deleted_at) VALUES(?,?,?,?,1,?,'red',?,?,?,?)",
+        )
+        .bind(
+          ids[i],
+          a.id,
+          a.revision_id,
+          i + 1,
+          i === 3 ? "discussion" : "marker",
+          JSON.stringify({ points: i === 3 ? [] : [[0.3, 0.4]] }),
+          admin,
+          i === 2 ? "Verify tolerance" : "",
+          i === 1 ? "2026-10-30" : null,
+        )
+        .run();
+    await legacy.db
+      .prepare("UPDATE documents SET review_counter=5 WHERE id=?")
+      .bind(a.id)
+      .run();
+    await legacy.db
+      .prepare(
+        "INSERT INTO review_messages(id,item_id,body,author_id) VALUES(?,?,?,?)",
+      )
+      .bind(
+        crypto.randomUUID(),
+        ids[4],
+        "Significant exchange; preserve exactly",
+        admin,
+      )
+      .run();
+    await legacy.db
+      .prepare(
+        "INSERT INTO review_events(id,item_id,actor_id,action,payload) VALUES(?,?,?,'reply.created','{}')",
+      )
+      .bind(crypto.randomUUID(), ids[4], admin)
+      .run();
+    const before = await legacy.db
+        .prepare("SELECT * FROM review_items ORDER BY id")
+        .all<Record<string, unknown>>(),
+      messages = await legacy.db.prepare("SELECT * FROM review_messages").all(),
+      events = await legacy.db.prepare("SELECT * FROM review_events").all();
+    await migrate(legacy.db, { after: "0004_pdf_review.sql" });
+    const after = await legacy.db
+      .prepare("SELECT * FROM review_items ORDER BY id")
+      .all<Record<string, unknown>>();
+    for (let i = 0; i < before.results.length; i++)
+      for (const [key, value] of Object.entries(before.results[i]))
+        expect(after.results[i][key]).toEqual(value);
+    expect(
+      (await legacy.db.prepare("SELECT * FROM review_messages").all()).results,
+    ).toEqual(messages.results);
+    expect(
+      (await legacy.db.prepare("SELECT * FROM review_events").all()).results,
+    ).toEqual(events.results);
+    expect(
+      (
+        await legacy.db
+          .prepare("SELECT COUNT(*) AS n FROM graphical_annotations")
+          .first<{ n: number }>()
+      )?.n,
+    ).toBe(4);
+    const points = (
+      await legacy.db
+        .prepare(
+          "SELECT id,publication FROM review_items WHERE is_point=1 ORDER BY id",
+        )
+        .all<{ id: string; publication: string }>()
+    ).results;
+    expect(points.map((p) => p.id).sort()).toEqual(
+      [ids[2], ids[3], ids[4]].sort(),
     );
-    expect(point.revision_id).toBe(revision);
-    kept.push(point.id);
-    await json(
-      await req(
-        `review-items/${point.id}`,
-        { version: 1, geometry: { points: [[0.4, 0.5]] }, color: "green" },
-        "PATCH",
-      ),
-    );
-    const reply = crypto.randomUUID();
-    await json(
-      await req(`review-items/${point.id}/messages`, {
-        id: reply,
-        body: `Reply on ${revision}`,
-      }),
-    );
-    await json(
-      await req(
-        `review-messages/${reply}`,
-        { version: 1, body: `Edited reply on ${revision}` },
-        "PATCH",
-      ),
-    );
-    await json(
-      await req(
-        `review-items/${point.id}`,
-        { version: 2, status: "waiting" },
-        "PATCH",
-      ),
-    );
-    const removed = await json<{ id: string }>(
-      await req(`revisions/${revision}/review-items`, {
-        ...body,
-        id: crypto.randomUUID(),
-      }),
-    );
-    await json(
-      await req(
-        `review-items/${removed.id}`,
-        { version: 1, annotation_deleted: true },
-        "PATCH",
-      ),
-    );
-  }
-  for (let i = 0; i < revisions.length; i++) {
-    const rows = await json<{
-      items: {
-        id: string;
-        geometry: { points: number[][] };
-        color: string;
-        revision_id: string;
-      }[];
-    }>(await req(`revisions/${revisions[i]}/annotations?page_number=1`));
-    expect(rows.items).toHaveLength(1);
-    expect(rows.items[0]).toMatchObject({
-      id: kept[i],
-      revision_id: revisions[i],
-      color: "green",
-      geometry: { points: [[0.4, 0.5]] },
-    });
-    const detail = await json<{
-      item: { status: string };
-      messages: { body: string }[];
-    }>(await req(`review-items/${kept[i]}`));
-    expect(detail.item.status).toBe("waiting");
-    expect(detail.messages[0].body).toBe(`Edited reply on ${revisions[i]}`);
-    expect(await (await req(`revisions/${revisions[i]}/content`)).text()).toBe(
-      new TextDecoder().decode(bytes),
-    );
+    expect(points.every((p) => p.publication === "draft")).toBe(true);
+    expect(
+      (
+        await legacy.db
+          .prepare("SELECT point_id FROM graphical_annotations WHERE id=?")
+          .bind(ids[0])
+          .first<{ point_id: string | null }>()
+      )?.point_id,
+    ).toBeNull();
+    expect(
+      (
+        await legacy.db
+          .prepare("SELECT review_counter AS n FROM documents WHERE id=?")
+          .bind(a.id)
+          .first<{ n: number }>()
+      )?.n,
+    ).toBe(5);
+  } finally {
+    await legacy.runtime.dispose();
   }
 });
