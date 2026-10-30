@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { Store, projectScope } from "./database";
+import { Store } from "./database";
 import { HttpError, type Bindings, type Principal } from "./types";
 import {
   approvalCreate,
@@ -68,7 +68,7 @@ async function row(s: Store, value: unknown) {
   return { a, organization_id: p.organization_id };
 }
 function guard(s: Store, project: string) {
-  const g = projectScope("p", s.userId, true);
+  const g = s.scopeProject("p", true);
   return {
     text: `EXISTS(SELECT 1 FROM projects p WHERE p.id=? AND ${g.text})`,
     args: [project, ...g.args],
@@ -488,17 +488,33 @@ export function approvalRoutes() {
                 : "cancelled",
       g = guard(s, a.project_id);
     const operation = crypto.randomUUID();
+    const traceIdentity = c.env.MULTIUSER_ENABLED === "true";
     const set =
       v.action === "submit"
         ? `,submitted_at=${time}`
         : decision
-          ? `,decided_at=${time},decided_by=?,decision_comment=?`
+          ? `,decided_at=${time},decided_by=?,decision_comment=?${traceIdentity ? ",decision_identity=?" : ""}`
           : "";
     const statements = [
       s.statement(
         `UPDATE approval_requests SET status=?,version=version+1,updated_at=${time}${set} WHERE id=? AND version=? AND status=? AND deleted_at IS NULL AND ${g.text}`,
         target,
-        ...(decision ? [s.userId, v.comment] : []),
+        ...(decision
+          ? [
+              s.userId,
+              v.comment,
+              ...(traceIdentity
+                ? [
+                    JSON.stringify({
+                      provider: s.identity?.provider ?? "legacy",
+                      issuer: s.identity?.issuer ?? null,
+                      subject: s.identity?.subject ?? null,
+                      user_id: s.userId,
+                    }),
+                  ]
+                : []),
+            ]
+          : []),
         a.id,
         v.version,
         a.status,

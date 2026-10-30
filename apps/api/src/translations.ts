@@ -1,3 +1,4 @@
+import { translationAccess } from "./access-control";
 import { Hono } from "hono";
 import { z } from "zod";
 import { Store } from "./database";
@@ -85,7 +86,9 @@ export async function sourceText(s: Store, ref: TranslationSource) {
       )
       .first();
   if (!row) throw new HttpError(404, "translation_source_unavailable");
-  const p = await s.requireProject(row.project_id, true);
+  const p = s.multiuser
+    ? await translationAccess(s, ref)
+    : await s.requireProject(row.project_id, true);
   if (
     (row.private_author && row.private_author !== s.userId) ||
     (row.status === "draft" && row.requester_id !== s.userId)
@@ -333,6 +336,12 @@ export function translationRoutes(
       .statement("SELECT * FROM translations WHERE id=?", id)
       .first<Stored>();
     if (!t) throw new HttpError(404, "translation_source_unavailable");
+    if (s.multiuser)
+      await translationAccess(
+        s,
+        { kind: t.source_kind, id: t.source_id, field: t.source_field },
+        true,
+      );
     const src = await sourceText(s, {
       kind: t.source_kind,
       id: t.source_id,

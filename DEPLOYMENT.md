@@ -161,3 +161,19 @@ Le fichier `scripts/initialize-empty-d1.sql` est sans commentaires SQL pour supp
 ## Phase 6 — traduction
 
 Appliquer la migration additive `0008_integrated_translations.sql` avec le contrôle D1 existant avant publication du Worker. Les traductions restent désactivées sans secret serveur `DEEPL_API_KEY` et variable `TRANSLATION_ENABLED=true`. Aucun service payant n’est activé. Voir [la configuration, les limites et les tests de phase 6](docs/PHASE6_TRANSLATIONS.md).
+
+## Phase 7 — activation contrôlée des comptes
+
+Conserver `MULTIUSER_ENABLED` absent ou `false` avant la revue. Le code garde le
+fonctionnement administrateur de phase 6 même avant migration 0009. Le contrôle
+refuse l’application distante de `0009_secure_collaboration.sql` sans
+`PHASE7_SECURITY_REVIEWED=true` et `PHASE7_BACKUP_PROOF` (SHA-256 de l’export restauré
+et vérifié), transmis depuis les variables du dépôt. Ces valeurs ne remplacent
+pas la vérification de la sauvegarde, du compte initial, des politiques Access et
+de la confidentialité R2.
+
+Après succès de migration/déploiement et validation de ces prérequis, activer
+`MULTIUSER_ENABLED=true` sur le Worker. `RESEND_API_KEY` et `INVITATION_FROM` sont
+facultatifs pour l’envoi réel ; sans eux aucun courriel d’invitation n’est annoncé
+comme envoyé. Garder les secrets hors du navigateur. Le propriétaire conserve la
+fusion et l’activation. Voir la [procédure complète, tests et retour arrière](docs/PHASE7_SECURITY.md).

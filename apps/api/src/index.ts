@@ -1,3 +1,5 @@
+import { accessRoutes } from "./access-routes";
+import { collaborationRoutes, authorizeMemberRequest } from "./collaboration";
 import type { TranslationProvider } from "./translation/provider";
 import { translationRoutes } from "./translations";
 import { approvalRoutes } from "./approvals";
@@ -25,6 +27,7 @@ export function createApp(
   identityProvider: IdentityProvider = new AccessIdentityProvider(),
   fetcher: typeof fetch = fetch,
   translationProviderFactory?: (env: Bindings) => TranslationProvider,
+  invitationFetcher?: typeof fetch,
 ) {
   const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
   app.use("*", secureHeaders());
@@ -55,6 +58,27 @@ export function createApp(
         })(c, next),
   );
   app.onError((error, c) => {
+    if (
+      error instanceof HttpError &&
+      [401, 403].includes(error.status) &&
+      !c.req.path.startsWith("/api/") &&
+      c.req.method === "GET"
+    )
+      return c.html(
+        "<!doctype html><html lang='fr'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>ForgeBridge</title><h1>ForgeBridge</h1><p>Session indisponible / Session unavailable / 会话不可用</p><a href='/cdn-cgi/access/logout'>Se reconnecter / Sign in again / 重新登录</a></html>",
+        error.status,
+      );
+
+    if (
+      error instanceof HttpError &&
+      c.env.MULTIUSER_ENABLED === "true" &&
+      c.get("store") &&
+      [403, 404].includes(error.status)
+    )
+      return c.json(
+        { error: "Resource unavailable", request_id: c.get("requestId") },
+        404,
+      );
     if (error instanceof HttpError)
       return c.json(
         { error: error.message, request_id: c.get("requestId") },
@@ -101,8 +125,45 @@ export function createApp(
       !(await c.env.RATE_LIMITER.limit({ key: principal.id })).success
     )
       throw new HttpError(429, "Too many requests");
+    let recordSession = false;
+    if (c.env.MULTIUSER_ENABLED === "true" && identity.sessionHash) {
+      const r = await c.env.DB.prepare(
+        "SELECT p.auth_not_before,EXISTS(SELECT 1 FROM revoked_sessions WHERE session_hash=? AND expires_at>unixepoch()) AS revoked,EXISTS(SELECT 1 FROM observed_sessions WHERE session_hash=?) AS observed FROM profiles p WHERE p.id=?",
+      )
+        .bind(identity.sessionHash, identity.sessionHash, principal.id)
+        .first<{
+          auth_not_before: number;
+          revoked: number;
+          observed: number;
+        }>();
+      if (!r || r.revoked || (identity.issuedAt ?? 0) <= r.auth_not_before)
+        throw new HttpError(401, "Session revoked; sign in again");
+      recordSession = !r.observed;
+    }
+    if (
+      c.env.MULTIUSER_ENABLED === "true" &&
+      recordSession &&
+      identity.sessionHash &&
+      identity.expiresAt
+    ) {
+      await c.env.DB.batch([
+        c.env.DB.prepare(
+          "INSERT OR IGNORE INTO observed_sessions(session_hash,user_id,expires_at) VALUES(?,?,?)",
+        ).bind(identity.sessionHash, principal.id, identity.expiresAt),
+        c.env.DB.prepare(
+          "INSERT INTO security_events(id,actor_id,action,resource_id) SELECT ?,?,'session.authenticated',? WHERE changes()>0",
+        ).bind(crypto.randomUUID(), principal.id, principal.id),
+      ]);
+    }
     c.set("principal", principal);
-    c.set("store", new Store(c.env.DB, principal.id));
+    const store = new Store(c.env.DB, principal.id, identity);
+    store.multiuser = c.env.MULTIUSER_ENABLED === "true";
+    c.set("store", store);
+    if (
+      c.req.path.startsWith("/api/v1/") &&
+      principal.id !== c.env.ADMIN_USER_ID
+    )
+      await authorizeMemberRequest(c);
     await next();
   });
   const uuid = z.uuid();
@@ -127,7 +188,12 @@ export function createApp(
       mode: "private-developer",
     }),
   );
-  app.get("/api/v1/me", async (c) => c.json(await c.get("store").me()));
+  app.get("/api/v1/me", async (c) =>
+    c.json({
+      ...(await c.get("store").me()),
+      is_primary_admin: c.get("principal").id === c.env.ADMIN_USER_ID,
+    }),
+  );
   app.patch("/api/v1/me", async (c) =>
     c.json(await c.get("store").preferences(await body(c, preferencesSchema))),
   );
@@ -202,6 +268,8 @@ export function createApp(
     c.json(await c.get("store").members(id(c.req.query("organization_id")))),
   );
   app.patch("/api/v1/organization_memberships/:user", async (c) => {
+    if (c.env.MULTIUSER_ENABLED === "true")
+      throw new HttpError(409, "Use reviewed project access controls");
     const v = await body(
       c,
       z.object({
@@ -231,6 +299,8 @@ export function createApp(
     );
   });
   app.patch("/api/v1/projects/:id/collaborators/:user", async (c) => {
+    if (c.env.MULTIUSER_ENABLED === "true")
+      throw new HttpError(409, "Use reviewed project access controls");
     const v = await body(
       c,
       z.object({ role: z.enum(roles).exclude(["owner"]), active: z.boolean() }),
@@ -269,6 +339,8 @@ export function createApp(
   app.delete("/api/v1/invitations/:id", async (c) =>
     c.json(await c.get("store").revokeInvitation(id(c.req.param("id")))),
   );
+  app.route("/api/v1/access", accessRoutes(invitationFetcher));
+  app.route("/api/v1/collaboration", collaborationRoutes());
   app.route("/", documentRoutes());
   app.route("/", reviewRoutes());
   app.route("/", communicationRoutes());

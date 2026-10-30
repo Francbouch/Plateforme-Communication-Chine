@@ -1,3 +1,5 @@
+import { ProjectMembers } from "../access/ProjectMembers";
+import type { Account } from "../types";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../client";
@@ -34,6 +36,9 @@ export function Collaborators({
       setMessage(t("error"));
     }
   }
+  const account = client.getQueryData<Account>(["me"]);
+  if (account?.mode === "collaborative")
+    return <ProjectMembers project={project} actor={account.profile.id} />;
   return (
     <section className="panel">
       <h2>{t("collaborators")}</h2>

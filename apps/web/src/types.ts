@@ -6,7 +6,12 @@ export type {
   Profile,
   Organization,
 } from "../../../packages/shared/src/index";
-export type Account = { profile: Profile; organizations: Organization[] };
+export type Account = {
+  profile: Profile;
+  organizations: Organization[];
+  is_primary_admin?: boolean;
+  mode?: string;
+};
 export type Invite = {
   id: string;
   email: string;

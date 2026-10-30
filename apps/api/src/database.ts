@@ -1,3 +1,5 @@
+import { resolveMemberIdentity } from "./access-identity";
+import type { Permission } from "../../../packages/shared/src/access";
 import { z } from "zod";
 import {
   HttpError,
@@ -34,6 +36,8 @@ export async function resolvePrincipal(
 ): Promise<Principal> {
   if (!env.ADMIN_EMAIL || !z.uuid().safeParse(env.ADMIN_USER_ID).success)
     throw new HttpError(503, "Administrator configuration required");
+  const member = await resolveMemberIdentity(db, identity, env);
+  if (member) return member;
   if (identity.email !== env.ADMIN_EMAIL.trim().toLowerCase())
     throw new HttpError(
       403,
@@ -85,10 +89,26 @@ export async function resolvePrincipal(
   return { id: linked.id, identity };
 }
 export class Store {
+  delegated?: { project: string; permission: Permission };
+  multiuser = false;
   constructor(
     readonly db: D1Database,
     readonly userId: string,
+    readonly identity?: Identity,
   ) {}
+  scopeProject(alias: string, admin = false): Scope {
+    if (!this.delegated) return projectScope(alias, this.userId, admin);
+    const g = projectScope(alias, this.userId, false);
+    return {
+      text: `(${g.text} AND ${alias}.id=? AND EXISTS(SELECT 1 FROM project_memberships gate WHERE gate.project_id=${alias}.id AND gate.user_id=? AND gate.active=1 AND gate.access_enabled=1 AND json_extract(gate.permissions,?)=1))`,
+      args: [
+        ...g.args,
+        this.delegated.project,
+        this.userId,
+        "$." + this.delegated.permission,
+      ],
+    };
+  }
   statement(text: string, ...args: unknown[]) {
     return this.db.prepare(text).bind(...args);
   }
@@ -105,7 +125,7 @@ export class Store {
     if (!row) throw new HttpError(403, "Organization access denied");
   }
   async requireProject(id: string, admin = false) {
-    const g = projectScope("p", this.userId, admin);
+    const g = this.scopeProject("p", admin);
     const row = await this.statement(
       `SELECT p.* FROM projects p WHERE p.id=? AND ${g.text}`,
       id,
@@ -161,8 +181,8 @@ export class Store {
     return {
       profile,
       organizations,
-      mode: "private-developer",
-      supplier_accounts_enabled: false,
+      mode: this.multiuser ? "collaborative" : "private-developer",
+      supplier_accounts_enabled: this.multiuser,
     };
   }
   async createOrganization(name: string) {

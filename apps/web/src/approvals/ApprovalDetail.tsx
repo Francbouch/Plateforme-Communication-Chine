@@ -143,6 +143,13 @@ export function ApprovalDetail({
           <div>
             <dt>{t("approvalDecision")}</dt>
             <dd>
+              <p>
+                {t(
+                  a.decision_identity
+                    ? "access_authenticated_decision"
+                    : "access_legacy_decision",
+                )}
+              </p>
               {a.decider} · {new Date(a.decided_at).toLocaleString()}
               <TranslatedText
                 source={{

@@ -1,4 +1,7 @@
 export interface Bindings {
+  MULTIUSER_ENABLED?: string;
+  RESEND_API_KEY?: string;
+  INVITATION_FROM?: string;
   TRANSLATION_ENABLED?: string;
   DEEPL_API_KEY?: string;
   TRANSLATION_DAILY_REQUESTS?: string;
@@ -23,6 +26,9 @@ export interface Identity {
   issuer: string;
   subject: string;
   email: string;
+  issuedAt?: number;
+  expiresAt?: number;
+  sessionHash?: string;
 }
 export interface Principal {
   id: string;

@@ -56,6 +56,18 @@ export class AccessIdentityProvider implements IdentityProvider {
         issuer,
         subject: payload.sub,
         email: payload.email.trim().toLowerCase(),
+        issuedAt: payload.iat,
+        expiresAt: payload.exp,
+        sessionHash: [
+          ...new Uint8Array(
+            await crypto.subtle.digest(
+              "SHA-256",
+              new TextEncoder().encode(token),
+            ),
+          ),
+        ]
+          .map((v) => v.toString(16).padStart(2, "0"))
+          .join(""),
       };
     } catch {
       throw new HttpError(401, "Invalid or expired Access session");

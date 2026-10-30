@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { Store, projectScope } from "./database";
+import { Store } from "./database";
 import { HttpError, type Bindings, type Principal } from "./types";
 import { assetKey } from "./storage";
 import {
@@ -40,7 +40,7 @@ function bucket(env: Bindings) {
   return env.DOCUMENTS;
 }
 function guard(store: Store, project: string) {
-  const g = projectScope("p", store.userId, true);
+  const g = store.scopeProject("p", true);
   return {
     text: `EXISTS(SELECT 1 FROM projects p WHERE p.id=? AND ${g.text})`,
     args: [project, ...g.args],
