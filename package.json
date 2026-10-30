@@ -19,7 +19,8 @@
     "test:preview": "playwright test --config playwright.preview.config.ts",
     "db:migrate": "npm run db:migrate -w @forgebridge/api",
     "build:worker": "npm run build -w @forgebridge/api",
-    "test:private": "playwright test --config playwright.private.config.ts"
+    "test:private": "playwright test --config playwright.private.config.ts",
+    "verify": "npm run typecheck && npm run lint && npm test && npm run build && npm run build:worker && npm run test:preview && npm run test:private"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261023.1",

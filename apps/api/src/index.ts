@@ -1,3 +1,4 @@
+import { reviewRoutes } from "./review";
 import { documentRoutes } from "./documents";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
@@ -262,6 +263,7 @@ export function createApp(
     c.json(await c.get("store").revokeInvitation(id(c.req.param("id")))),
   );
   app.route("/", documentRoutes());
+  app.route("/", reviewRoutes());
   app.all("/api/*", () => {
     throw new HttpError(404, "Not found");
   });

@@ -858,3 +858,157 @@ label.button:focus-within {
   min-width: 180px;
   overflow-wrap: anywhere;
 }
+
+/* Revision-scoped PDF review. SVG overlays use PDF coordinates, not screen pixels. */
+.review-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  gap: 16px;
+  align-items: start;
+}
+.review-layout.expanded {
+  grid-template-columns: minmax(0, 1fr);
+}
+.review-layout .viewer-content {
+  min-width: 0;
+}
+.pdf-sheet {
+  position: relative;
+  margin: 0 auto;
+  flex: none;
+}
+.pdf-sheet canvas {
+  margin: 0;
+}
+.annotation-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: crosshair;
+}
+.annotation-selectable {
+  cursor: move;
+}
+.annotation-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 10px;
+  background: var(--soft);
+  border-radius: 8px;
+}
+.annotation-toolbar button[aria-pressed="true"] {
+  color: white;
+  background: var(--accent);
+}
+.annotation-toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.annotation-retry {
+  position: absolute;
+  z-index: 5;
+  top: 10px;
+  left: 10px;
+  max-width: 90%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px;
+  background: var(--surface);
+  border: 2px solid #dc2626;
+  color: var(--text);
+}
+.review-panel {
+  max-height: 75dvh;
+  overflow: auto;
+  padding: 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  min-width: 0;
+}
+.review-panel form {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0;
+}
+.review-panel p,
+.review-panel strong {
+  overflow-wrap: anywhere;
+}
+.review-panel p {
+  white-space: pre-wrap;
+}
+.review-filters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.review-filters .checkbox {
+  grid-column: 1 / -1;
+}
+.review-list {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0;
+}
+.review-list li {
+  margin: 8px 0;
+}
+.review-list button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-weight: 400;
+}
+.review-list button.selected {
+  border-color: var(--accent);
+  background: var(--soft);
+}
+.review-list button span {
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+}
+.review-thread {
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}
+.review-message,
+.review-event {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.review-panel h4 {
+  margin: 16px 0 10px;
+}
+.viewer:fullscreen {
+  padding: 20px;
+  background: var(--bg);
+  overflow: auto;
+}
+.page-replacement {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 20px 0;
+}
+.page-replacement summary,
+.review-panel summary {
+  cursor: pointer;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+@media (max-width: 900px) {
+  .review-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .review-panel {
+    max-height: 60dvh;
+  }
+}

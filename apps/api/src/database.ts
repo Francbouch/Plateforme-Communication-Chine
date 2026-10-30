@@ -119,6 +119,7 @@ export class Store {
     org: string,
     action: string,
     resource: string,
+    conflict = false,
   ) {
     const auditId = crypto.randomUUID();
     const eventId = crypto.randomUUID();
@@ -140,7 +141,12 @@ export class Store {
       ),
     ]);
     if (!results[0].meta.changes)
-      throw new HttpError(403, "Resource unavailable or permission denied");
+      throw new HttpError(
+        conflict ? 409 : 403,
+        conflict
+          ? "Record changed; refresh before saving"
+          : "Resource unavailable or permission denied",
+      );
   }
   async me() {
     const profile = await this.statement(

@@ -268,6 +268,18 @@ export function documentRoutes() {
       page,
     });
   });
+  app.get("/api/v1/revisions/:id", async (c) => {
+    const s = c.get("store"),
+      r = await s
+        .statement(
+          "SELECT id,document_id,ordinal,label,change_description,filename,extension,content_type,size,sha256,created_at FROM document_revisions WHERE id=?",
+          uuid(c.req.param("id")),
+        )
+        .first<{ document_id: string }>();
+    if (!r) throw new HttpError(404, "Revision not found");
+    await documentRow(s, r.document_id);
+    return c.json(r);
+  });
   app.get("/api/v1/documents/:id", async (c) => {
     const s = c.get("store"),
       d = await documentRow(s, uuid(c.req.param("id")));

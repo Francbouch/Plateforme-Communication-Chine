@@ -135,7 +135,7 @@ export function Projects({
                   defaultValue={editing?.code}
                   required
                   maxLength={40}
-                  pattern="[A-Za-z0-9_-]+"
+                  pattern={"[A-Za-z0-9_\\-]+"}
                 />
               </Field>
               <Field name="name">

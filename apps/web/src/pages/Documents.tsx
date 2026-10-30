@@ -12,6 +12,8 @@ import {
 import { useTranslation } from "react-i18next";
 import { api, ApiError } from "../client";
 import { isDemo } from "../demo";
+import { PageReplacement } from "../components/PageReplacement";
+import type { ReviewTarget } from "../../../../packages/shared/src/review";
 import { DocumentViewer } from "../components/DocumentViewer";
 import {
   documentStatuses,
@@ -19,6 +21,7 @@ import {
   maxUploadBytes,
   type Folder,
   type DocumentRow,
+  type Revision,
   type DocumentInfo,
   type DocumentDetail,
   type Page,
@@ -160,6 +163,7 @@ export function Documents({ projects }: { projects: Project[] }) {
     [revLabel, setRevLabel] = useState(""),
     [changes, setChanges] = useState(""),
     [viewRevision, setViewRevision] = useState("");
+  const [reviewTarget, setReviewTarget] = useState<ReviewTarget | null>(null);
   const [folderPage, setFolderPage] = useState(0);
   const [revisionPage, setRevisionPage] = useState(0),
     [historyPage, setHistoryPage] = useState(0);
@@ -241,9 +245,20 @@ export function Documents({ projects }: { projects: Project[] }) {
       ),
     enabled: enabled && !!selected,
   });
-  const current =
-    detail.data?.revisions.find((r) => r.id === viewRevision) ??
-    detail.data?.revisions[0];
+  const targetedRevision = useQuery({
+    queryKey: ["revision-meta", viewRevision],
+    queryFn: () => api<Revision>(`revisions/${viewRevision}`),
+    enabled:
+      !!selected &&
+      !!viewRevision &&
+      !detail.data?.revisions.some((r) => r.id === viewRevision),
+  });
+  const current = viewRevision
+    ? (detail.data?.revisions.find((r) => r.id === viewRevision) ??
+      (targetedRevision.data?.document_id === selected
+        ? targetedRevision.data
+        : undefined))
+    : detail.data?.revisions[0];
   const refresh = async () => {
     await Promise.all([
       client.invalidateQueries({ queryKey: ["folders"] }),
@@ -355,13 +370,16 @@ export function Documents({ projects }: { projects: Project[] }) {
       });
       await api(`uploads/${uploadId}/complete`, {});
       transferUpdate(item.id, { state: "done", progress: 100 });
+      return true;
     } catch (e) {
       transferUpdate(item.id, { state: "failed", error: errorText(e) });
+      return false;
     }
   }
   async function enqueue(
     files: FileList | File[],
     document: DocumentInfo | null = null,
+    override?: { label: string; change: string },
   ) {
     if (uploading) {
       setMessage(t("loading"));
@@ -371,30 +389,35 @@ export function Documents({ projects }: { projects: Project[] }) {
       setMessage(t(config.isPending ? "loading" : "storageNotReady"));
       return;
     }
+    const requestedLabel = override?.label ?? revLabel,
+      requestedChange = override?.change ?? changes;
     const added = Array.from(files).map((file) => ({
       id: crypto.randomUUID(),
       file,
       progress: 0,
       state: "waiting" as const,
       document,
-      label: document ? revLabel : "A",
-      change: changes,
+      label: document ? requestedLabel : "A",
+      change: requestedChange,
     }));
     if (document && added.length !== 1) {
       setMessage(t("oneRevisionFile"));
       return;
     }
-    if (document && !revLabel.trim()) {
+    if (document && !requestedLabel.trim()) {
       setMessage(t("revisionRequired"));
       return;
     }
     setTransfers((old) => [...old.filter((i) => i.state !== "done"), ...added]);
     setUploading(true);
     try {
+      let success = true;
       for (const item of added)
-        await send(item, document, document ? revLabel : "A", changes);
+        success =
+          (await send(item, document, item.label, item.change)) && success;
       setRevisionPage(0);
       await refresh();
+      return success;
     } finally {
       setUploading(false);
     }
@@ -1000,6 +1023,14 @@ export function Documents({ projects }: { projects: Project[] }) {
                     value={current?.id ?? ""}
                     onChange={(e) => setViewRevision(e.target.value)}
                   >
+                    {current &&
+                      !detail.data.revisions.some(
+                        (r) => r.id === current.id,
+                      ) && (
+                        <option value={current.id}>
+                          {current.label} · {current.filename}
+                        </option>
+                      )}
                     {detail.data.revisions.map((r, i) => (
                       <option key={r.id} value={r.id}>
                         {r.label}
@@ -1031,7 +1062,34 @@ export function Documents({ projects }: { projects: Project[] }) {
                 {current && (
                   <>
                     <p>{current.change_description}</p>
-                    <DocumentViewer revision={current} />
+                    <DocumentViewer
+                      revision={current}
+                      target={reviewTarget}
+                      onReviewNavigate={(target) => {
+                        setViewRevision(target.revision_id);
+                        setReviewTarget(target);
+                      }}
+                    />
+                    {current.extension === "pdf" &&
+                      detail.data.document.status !== "archived" && (
+                        <PageReplacement
+                          key={current.id}
+                          revision={current}
+                          busy={uploading}
+                          onSave={async (file, label, description) => {
+                            const success = await enqueue(
+                              [file],
+                              detail.data!.document,
+                              { label, change: description },
+                            );
+                            if (success) {
+                              setViewRevision("");
+                              setReviewTarget(null);
+                            }
+                            return !!success;
+                          }}
+                        />
+                      )}
                   </>
                 )}
                 <section className="revision-upload">
