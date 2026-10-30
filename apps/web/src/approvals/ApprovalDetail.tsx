@@ -1,3 +1,4 @@
+import { TranslatedText } from "../translations/TranslatedText";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { NavLink } from "react-router";
@@ -7,7 +8,6 @@ import { referenceUrl } from "../../../../packages/shared/src/messages";
 import type { ApprovalDetail as Detail } from "../../../../packages/shared/src/approvals";
 import { ApprovalForm } from "./ApprovalForm";
 import { ReferencePicker } from "../messages/ReferencePicker";
-import { MessageBody } from "../components/MessageBody";
 export function ApprovalDetail({
   id,
   project,
@@ -115,7 +115,11 @@ export function ApprovalDetail({
         · {t(`approvalPurpose_${a.purpose}`)}
       </p>
       {!a.is_latest && <p className="notice">{t("approvalObsolete")}</p>}
-      <MessageBody body={a.description} />
+      <TranslatedText
+        source={{ kind: "approval", id: a.id, field: "description" }}
+        text={a.description}
+        official
+      />
       <dl className="approval-metadata">
         <div>
           <dt>{t("approvalRequester")}</dt>
@@ -140,7 +144,15 @@ export function ApprovalDetail({
             <dt>{t("approvalDecision")}</dt>
             <dd>
               {a.decider} · {new Date(a.decided_at).toLocaleString()}
-              <MessageBody body={a.decision_comment} />
+              <TranslatedText
+                source={{
+                  kind: "approval",
+                  id: a.id,
+                  field: "decision_comment",
+                }}
+                text={a.decision_comment}
+                official
+              />
             </dd>
           </div>
         )}
@@ -349,7 +361,11 @@ export function ApprovalDetail({
             <small>
               {e.actor} · {new Date(e.created_at).toLocaleString()}
             </small>
-            <ApprovalEventPayload payload={e.payload} project={project} />
+            <ApprovalEventPayload
+              eventId={e.id}
+              payload={e.payload}
+              project={project}
+            />
           </article>
         ))}
       <div className="toolbar">
@@ -411,9 +427,11 @@ export function ApprovalDetail({
   );
 }
 function ApprovalEventPayload({
+  eventId,
   payload,
   project,
 }: {
+  eventId: string;
   payload: string;
   project: string;
 }) {
@@ -446,7 +464,13 @@ function ApprovalEventPayload({
   }
   return (
     <>
-      {p.comment && <MessageBody body={p.comment} />}{" "}
+      {p.comment && (
+        <TranslatedText
+          source={{ kind: "approval_event", id: eventId, field: "comment" }}
+          text={p.comment}
+          official
+        />
+      )}{" "}
       {p.from && (
         <p>
           {t(`approval_${p.from}`)} → {t(`approval_${p.to}`)}

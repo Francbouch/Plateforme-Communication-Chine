@@ -1,4 +1,4 @@
-import { MessageBody } from "../components/MessageBody";
+import { TranslatedText } from "../translations/TranslatedText";
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -363,6 +363,22 @@ export function ReviewPanel({
               : ""}
             {detail.data.item.title || detail.data.item.summary}
           </h3>
+          <TranslatedText
+            source={{
+              kind: "review_item",
+              id: detail.data.item.id,
+              field: "title",
+            }}
+            text={detail.data.item.title ?? ""}
+          />
+          <TranslatedText
+            source={{
+              kind: "review_item",
+              id: detail.data.item.id,
+              field: "summary",
+            }}
+            text={detail.data.item.summary}
+          />
           <PointEditor
             key={`${detail.data.item.id}-${detail.data.item.version}`}
             item={detail.data.item}
@@ -697,7 +713,10 @@ function Message({
         </form>
       ) : (
         <>
-          <MessageBody body={message.body} />
+          <TranslatedText
+            source={{ kind: "review_message", id: message.id, field: "body" }}
+            text={message.body}
+          />
           {actor === message.author_id && (
             <button onClick={() => setEditing(true)}>{t("editReply")}</button>
           )}

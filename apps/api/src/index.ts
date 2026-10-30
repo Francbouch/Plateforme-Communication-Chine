@@ -1,3 +1,5 @@
+import type { TranslationProvider } from "./translation/provider";
+import { translationRoutes } from "./translations";
 import { approvalRoutes } from "./approvals";
 import { communicationRoutes } from "./messages";
 import { reviewRoutes } from "./review";
@@ -22,6 +24,7 @@ type Variables = { store: Store; principal: Principal; requestId: string };
 export function createApp(
   identityProvider: IdentityProvider = new AccessIdentityProvider(),
   fetcher: typeof fetch = fetch,
+  translationProviderFactory?: (env: Bindings) => TranslationProvider,
 ) {
   const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
   app.use("*", secureHeaders());
@@ -270,6 +273,7 @@ export function createApp(
   app.route("/", reviewRoutes());
   app.route("/", communicationRoutes());
   app.route("/", approvalRoutes());
+  app.route("/api/v1", translationRoutes(translationProviderFactory));
   app.all("/api/*", () => {
     throw new HttpError(404, "Not found");
   });
