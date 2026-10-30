@@ -157,3 +157,7 @@ Le binding R2 est retiré de la configuration par défaut tant que le bucket dé
 ### Collage dans la console D1
 
 Le fichier `scripts/initialize-empty-d1.sql` est sans commentaires SQL pour supporter la console web qui peut regrouper les lignes du collage. Si elle affiche « No SQL statements detected », vérifier d’abord les tables avec `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY name;`. Appliquer le baseline uniquement si cette requête ne retourne aucune table applicative. Si des tables existent ou si une autre erreur apparaît, diagnostiquer avant de relancer ; ne supprimer aucune table.
+
+## Phase 6 — traduction
+
+Appliquer la migration additive `0008_integrated_translations.sql` avec le contrôle D1 existant avant publication du Worker. Les traductions restent désactivées sans secret serveur `DEEPL_API_KEY` et variable `TRANSLATION_ENABLED=true`. Aucun service payant n’est activé. Voir [la configuration, les limites et les tests de phase 6](docs/PHASE6_TRANSLATIONS.md).

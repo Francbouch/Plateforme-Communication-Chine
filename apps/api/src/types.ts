@@ -1,4 +1,9 @@
 export interface Bindings {
+  TRANSLATION_ENABLED?: string;
+  DEEPL_API_KEY?: string;
+  TRANSLATION_DAILY_REQUESTS?: string;
+  TRANSLATION_DAILY_CHARACTERS?: string;
+  TRANSLATION_PER_MINUTE?: string;
   DB?: D1Database;
   DOCUMENTS?: R2Bucket;
   APP_ORIGIN?: string;

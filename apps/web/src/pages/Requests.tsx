@@ -1,3 +1,4 @@
+import { TranslatedText } from "../translations/TranslatedText";
 import { ApprovalForm } from "../approvals/ApprovalForm";
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -178,7 +179,16 @@ function ProjectRequests({ project }: { project: string }) {
                 <td>
                   <code>{r.id.slice(0, 8)}</code>
                 </td>
-                <td>{r.title}</td>
+                <td>
+                  <TranslatedText
+                    source={{ kind: "request", id: r.id, field: "title" }}
+                    text={r.title}
+                  />
+                  <TranslatedText
+                    source={{ kind: "request", id: r.id, field: "description" }}
+                    text={r.description}
+                  />
+                </td>
                 <td>{t(`request_${r.status}`)}</td>
                 <td>{t(`priority_${r.priority}`)}</td>
                 <td>{r.responsible || "—"}</td>

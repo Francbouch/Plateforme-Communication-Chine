@@ -1,3 +1,4 @@
+import { Glossary } from "../translations/Glossary";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "../client";
@@ -65,6 +66,7 @@ export function Admin({
         </div>
       </div>
       <p role="status">{message}</p>
+      <Glossary key={org} org={org} />
       <section className="panel">
         <h2>{t("createOrganization")}</h2>
         <p>{t("privateMode")}</p>

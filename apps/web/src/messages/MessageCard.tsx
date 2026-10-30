@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { NavLink } from "react-router";
 import { api } from "../client";
-import { MessageBody } from "../components/MessageBody";
+import { TranslatedText } from "../translations/TranslatedText";
 import {
   referenceUrl,
   type Message,
@@ -107,7 +107,10 @@ export function MessageCard({
               </button>
             </form>
           ) : (
-            <MessageBody body={m.body} />
+            <TranslatedText
+              source={{ kind: "message", id: m.id, field: "body" }}
+              text={m.body}
+            />
           )}
           <div className="message-references">
             {m.references.map((r, i) => (

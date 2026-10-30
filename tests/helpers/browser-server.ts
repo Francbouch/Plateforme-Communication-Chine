@@ -34,6 +34,10 @@ const env: Bindings = {
   ADMIN_EMAIL: "browser@example.test",
   ADMIN_USER_ID: crypto.randomUUID(),
   ADMIN_NAME: "Browser test administrator",
+  TRANSLATION_ENABLED: "true",
+  DEEPL_API_KEY: "test-fixture-only:fx",
+  TRANSLATION_PER_MINUTE: "30",
+  TRANSLATION_DAILY_CHARACTERS: "500000",
   VERCEL_ORIGIN: "https://test.vercel.app",
   ORIGIN_SHARED_SECRET: secret,
 };
@@ -69,7 +73,7 @@ const upstream: typeof fetch = async (input, init) => {
 };
 const bundled = await build({
   stdin: {
-    contents: `import {createApp} from './apps/api/src/index';import {AccessIdentityProvider} from './apps/api/src/identity';import {createLocalJWKSet} from 'jose';const provider=new AccessIdentityProvider(createLocalJWKSet({keys:[${JSON.stringify({ ...publicKey, kid: "browser-test", alg: "RS256" })}]}));export default createApp(provider);`,
+    contents: `import {createApp} from './apps/api/src/index';import {AccessIdentityProvider} from './apps/api/src/identity';import {createLocalJWKSet} from 'jose';const provider=new AccessIdentityProvider(createLocalJWKSet({keys:[${JSON.stringify({ ...publicKey, kid: "browser-test", alg: "RS256" })}]}));import {DeepLFreeProvider} from './apps/api/src/translation/provider';import {simulatedDeepLFetch} from './tests/helpers/translation-provider';export default createApp(provider,fetch,env=>new DeepLFreeProvider(env.DEEPL_API_KEY,simulatedDeepLFetch));`,
     resolveDir: process.cwd(),
   },
   bundle: true,

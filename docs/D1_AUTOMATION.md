@@ -100,3 +100,5 @@ Les résultats actuels sont regroupés dans [le rapport de phase 4](PHASE4_COMMU
 Aucune exécution distante ni publication n'est déclarée par ces tests locaux.
 
 La phase 5 ajoute 0007 sans changer le contrôle : [rapport des approbations](PHASE5_APPROVALS.md).
+
+Phase 6 : `0008_integrated_translations.sql` ajoute uniquement les tables de traduction et de glossaire ; conserver le même ordre migration puis déploiement. Voir [PHASE6_TRANSLATIONS.md](PHASE6_TRANSLATIONS.md).
