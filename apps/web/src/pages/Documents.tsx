@@ -1,3 +1,6 @@
+import { ApprovalForm } from "../approvals/ApprovalForm";
+import { RevisionApprovalBadge } from "../approvals/RevisionApprovalBadge";
+import { useNavigate } from "react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useSearchParams, NavLink } from "react-router";
@@ -132,6 +135,8 @@ interface Transfer {
   change: string;
 }
 export function Documents({ projects }: { projects: Project[] }) {
+  const navigate = useNavigate();
+  const [approvalForm, setApprovalForm] = useState(false);
   const { project: routeProject } = useParams(),
     [search, setSearch] = useSearchParams(),
     { t } = useTranslation(),
@@ -292,6 +297,9 @@ export function Documents({ projects }: { projects: Project[] }) {
     !detail.isPending;
   const refresh = async () => {
     await Promise.all([
+      client.invalidateQueries({ queryKey: ["revision-approval"] }),
+      client.invalidateQueries({ queryKey: ["approvals"] }),
+      client.invalidateQueries({ queryKey: ["approval-summary"] }),
       client.invalidateQueries({ queryKey: ["folders"] }),
       client.invalidateQueries({ queryKey: ["folder-picker"] }),
       client.invalidateQueries({ queryKey: ["folder-path"] }),
@@ -1044,7 +1052,7 @@ export function Documents({ projects }: { projects: Project[] }) {
             {detail.data && (
               <>
                 <p>
-                  {detail.data.document.number} ·{" "}
+                  {detail.data.document.number} · {t("documentaryStatusLabel")}:{" "}
                   {t(detail.data.document.status)} ·{" "}
                   {detail.data.document.description}
                 </p>
@@ -1096,6 +1104,31 @@ export function Documents({ projects }: { projects: Project[] }) {
                 {current && (
                   <>
                     <p>{current.change_description}</p>
+                    <RevisionApprovalBadge
+                      key={`approval-${current.id}`}
+                      revision={current.id}
+                      project={project}
+                    />
+                    <button onClick={() => setApprovalForm(true)}>
+                      {t("requestApproval")}
+                    </button>
+                    {approvalForm && (
+                      <ApprovalForm
+                        seed={{
+                          project,
+                          document_id: current.document_id,
+                          revision_id: current.id,
+                          revision_label: `${detail.data.document.number || detail.data.document.name} · ${current.label}`,
+                        }}
+                        onClose={() => setApprovalForm(false)}
+                        onSaved={(id) =>
+                          navigate(
+                            `/projects/${project}/approvals?approval=${id}`,
+                          )
+                        }
+                      />
+                    )}
+
                     <DocumentViewer
                       revision={current}
                       target={reviewTarget}

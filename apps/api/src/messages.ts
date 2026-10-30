@@ -473,7 +473,7 @@ export function communicationRoutes() {
     await s.write(
       [
         s.statement(
-          `UPDATE conversation_messages SET deleted_at=${time},version=version+1,updated_at=${time} WHERE id=? AND version=? AND shared=0 AND deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM technical_requests WHERE message_id=?) AND NOT EXISTS(SELECT 1 FROM conversation_messages WHERE parent_id=?) AND ${g.text} AND EXISTS(SELECT 1 FROM project_conversations WHERE id=? AND archived=0)`,
+          `UPDATE conversation_messages SET deleted_at=${time},version=version+1,updated_at=${time} WHERE id=? AND version=? AND shared=0 AND deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM technical_requests WHERE message_id=?) AND NOT EXISTS(SELECT 1 FROM approval_requests WHERE message_id=conversation_messages.id AND deleted_at IS NULL) AND NOT EXISTS(SELECT 1 FROM conversation_messages WHERE parent_id=?) AND ${g.text} AND EXISTS(SELECT 1 FROM project_conversations WHERE id=? AND archived=0)`,
           m.row.id,
           v.version,
           m.row.id,

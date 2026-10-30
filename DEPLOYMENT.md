@@ -1,5 +1,8 @@
 # Déploiement privé ForgeBridge — D1 / R2 / Access
 
+Phase 5 : appliquer la migration additive 0007 via le contrôle existant avant
+de publier le Worker correspondant. Voir [approbations internes et tests](docs/PHASE5_APPROVALS.md).
+
 Avant de déployer la phase 4, suivre [les migrations contrôlées](docs/D1_AUTOMATION.md)
 et [le rapport de phase 4](docs/PHASE4_COMMUNICATIONS.md). La migration additive
 0006 doit suivre 0005 ; ne pas rejouer 0004 manuelle.

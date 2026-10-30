@@ -1,3 +1,4 @@
+import { MessageApprovals } from "../approvals/MessageApprovals";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { NavLink } from "react-router";
@@ -152,6 +153,7 @@ export function MessageCard({
                 ))}
             </div>
           ))}
+          <MessageApprovals message={m} project={project} />
           <div className="message-actions">
             {!m.parent_id && (
               <button onClick={() => onReply(m)}>
