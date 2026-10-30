@@ -829,4 +829,23 @@ describe("project communication on real workerd D1/R2", () => {
       await json(await req(`projects/${project}/message-uploads`)),
     ).toEqual([]);
   });
+  it("shows the source document on a request without inventing a technical point", async () => {
+    const u = await reserve();
+    await content(u.id);
+    const doc = await complete(u.id);
+    const c = await conv(),
+      m = await send(c, "Document-only request", {
+        references: [{ document_id: doc.id, revision_id: doc.revision_id }],
+      });
+    await json(
+      await req(`messages/${m.id}/requests`, {
+        title: "Check source document",
+      }),
+    );
+    const rows = await json<{ items: TechnicalRequest[] }>(
+      await req(`projects/${project}/requests`),
+    );
+    expect(rows.items[0].document_name).toBe("Mechanism");
+    expect(rows.items[0].point_id).toBeNull();
+  });
 });

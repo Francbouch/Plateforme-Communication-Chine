@@ -5,8 +5,10 @@ production. Sur `main`, après validation complète du même SHA, il inspecte pu
 migre uniquement `forgebridge-db` via la configuration `apps/api/wrangler.jsonc`.
 Le secret GitHub Actions `CLOUDFLARE_API_TOKEN` existant est réutilisé ; ne jamais
 le recopier dans le dépôt. Il doit autoriser D1 pour le compte ForgeBridge.
-La variable GitHub Actions non secrète `CLOUDFLARE_ACCOUNT_ID` peut préciser ce
-compte, notamment si le token donne accès à plusieurs comptes. Pour le déploiement
+Le compte ForgeBridge `5b91da32c6ac0121968ee821e875ce7d`, confirmé par le contrôle
+Workers Builds du service `forgebridge-api` sur la PR, est utilisé par défaut.
+La variable GitHub Actions non secrète `CLOUDFLARE_ACCOUNT_ID` peut le préciser
+explicitement. Cela évite de dépendre de la découverte des comptes par le token. Pour le déploiement
 optionnel du Worker, le token doit aussi disposer des droits Worker nécessaires.
 
 ## Reconnaissance et sécurité

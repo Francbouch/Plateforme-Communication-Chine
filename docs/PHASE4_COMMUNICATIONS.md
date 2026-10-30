@@ -74,6 +74,10 @@ expirent après 24 h et doivent être annulées si abandonnées ; aucun balayage
 R2 ni règle lifecycle appliqué au bucket existant. Limite de 20 transferts non
 terminés par auteur/projet pour maîtriser l'accumulation.
 
+Les huit références possibles d’un message sont validées dans une seule requête
+D1, afin de limiter les lectures et respecter le budget par invocation même avec
+cinq pièces jointes.
+
 Messages et réponses : pages de 30 avec curseur `(created_at,id)`, sans charger le
 fil complet. Conversations, recherche et demandes : pages de 30, filtres côté
 serveur, index de projet/activité, parent, référence, statut/priorité et historique.
@@ -118,7 +122,7 @@ Validation finale complète `npm run verify`, code de sortie 0 :
 | Contrôle                           | Résultat                                                                                                  |
 | ---------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | TypeScript et ESLint               | Réussis                                                                                                   |
-| Vitest, 7 fichiers                 | **63/63 réussis**, dont 13 tests de communications                                                        |
+| Vitest, 7 fichiers                 | **64/64 réussis**, dont 14 tests de communications                                                        |
 | Build Vite et build Worker dry-run | Réussis ; avertissement de taille des chunks PDF non bloquant                                             |
 | Playwright preview existant        | **4/4 réussis**                                                                                           |
 | Playwright privé D1/R2 réel local  | **10/10 réussis**, dont 3 parcours complets de phase 4                                                    |

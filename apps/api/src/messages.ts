@@ -104,45 +104,35 @@ async function hydrate(s: Store, rows: Message[]) {
     attachments: attachments.filter((f) => f.message_id === r.id),
   }));
 }
-async function validateReference(
+async function validateReferences(
   s: Store,
   project: string,
-  ref: z.infer<typeof referenceSchema>,
+  refs: z.infer<typeof referenceSchema>[],
 ) {
-  if (ref.document_id) {
-    const d = await s
-      .statement(
-        "SELECT id FROM documents WHERE id=? AND project_id=?",
-        ref.document_id,
-        project,
-      )
-      .first();
-    if (!d) throw new HttpError(400, "Document outside this project");
-  }
-  if (ref.revision_id) {
-    const r = await s
-      .statement(
-        "SELECT extension FROM document_revisions WHERE id=? AND document_id=?",
-        ref.revision_id,
-        ref.document_id,
-      )
-      .first<{ extension: string }>();
-    if (!r || (ref.page && r.extension !== "pdf"))
-      throw new HttpError(400, "Revision or PDF page unavailable");
-  }
-  if (ref.point_id) {
-    const p = await s
-      .statement(
-        "SELECT page FROM review_items WHERE id=? AND document_id=? AND revision_id=? AND is_point=1 AND point_deleted_at IS NULL",
-        ref.point_id,
-        ref.document_id,
-        ref.revision_id,
-      )
-      .first<{ page: number }>();
-    if (!p || (ref.page && ref.page !== p.page))
-      throw new HttpError(400, "Technical point reference mismatch");
-  }
+  if (!refs.length) return;
+  // One project-scoped query for up to eight references keeps the maximal message
+  // below the Free-plan per-invocation D1 query budget, even with five attachments.
+  const result = await s
+    .statement(
+      `SELECT count(*) AS n FROM json_each(?) f
+    LEFT JOIN documents d ON d.id=json_extract(f.value,'$.document_id')
+    LEFT JOIN document_revisions r ON r.id=json_extract(f.value,'$.revision_id') AND r.document_id=d.id
+    LEFT JOIN review_items i ON i.id=json_extract(f.value,'$.point_id') AND i.document_id=d.id AND i.revision_id=r.id
+    WHERE (json_extract(f.value,'$.document_id') IS NULL OR (d.id IS NOT NULL AND d.project_id=?))
+      AND (json_extract(f.value,'$.revision_id') IS NULL OR r.id IS NOT NULL)
+      AND (json_extract(f.value,'$.page') IS NULL OR r.extension='pdf')
+      AND (json_extract(f.value,'$.point_id') IS NULL OR (i.id IS NOT NULL AND i.is_point=1 AND i.point_deleted_at IS NULL AND (json_extract(f.value,'$.page') IS NULL OR json_extract(f.value,'$.page')=i.page)))`,
+      JSON.stringify(refs),
+      project,
+    )
+    .first<{ n: number }>();
+  if (result?.n !== refs.length)
+    throw new HttpError(
+      400,
+      "Document, revision, PDF page or technical point outside this project",
+    );
 }
+
 function bucket(env: Bindings) {
   if (!env.DOCUMENTS) throw new HttpError(503, "Private storage unavailable");
   return env.DOCUMENTS;
@@ -351,8 +341,7 @@ export function communicationRoutes() {
           "Reply must belong to the root message in this conversation",
         );
     }
-    for (const ref of v.references)
-      await validateReference(s, conv.project_id, ref);
+    await validateReferences(s, conv.project_id, v.references);
     if (new Set(v.attachments).size !== v.attachments.length)
       throw new HttpError(400, "Duplicate attachment");
     for (const key of v.attachments) {
@@ -791,7 +780,7 @@ export function communicationRoutes() {
           ? "CASE t.priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END"
           : "t.updated_at DESC";
     const rows = await s.all(
-      `SELECT t.*,m.conversation_id,d.name AS document_name FROM technical_requests t JOIN conversation_messages m ON m.id=t.message_id LEFT JOIN review_items i ON i.id=t.point_id LEFT JOIN documents d ON d.id=i.document_id WHERE t.project_id=? AND (m.shared=1 OR m.author_id=?) AND (?='' OR t.status=?) AND (?='' OR t.priority=?) AND (?='' OR instr(lower(t.title||' '||t.description||' '||t.responsible),lower(?))>0) ORDER BY ${order},t.id LIMIT 31 OFFSET ?`,
+      `SELECT t.*,m.conversation_id,COALESCE(d.name,(SELECT group_concat(name,', ') FROM (SELECT DISTINCT rd.name FROM message_references f JOIN documents rd ON rd.id=f.document_id WHERE f.message_id=t.message_id))) AS document_name FROM technical_requests t JOIN conversation_messages m ON m.id=t.message_id LEFT JOIN review_items i ON i.id=t.point_id LEFT JOIN documents d ON d.id=i.document_id WHERE t.project_id=? AND (m.shared=1 OR m.author_id=?) AND (?='' OR t.status=?) AND (?='' OR t.priority=?) AND (?='' OR instr(lower(t.title||' '||t.description||' '||t.responsible),lower(?))>0) ORDER BY ${order},t.id LIMIT 31 OFFSET ?`,
       project,
       s.userId,
       status,
