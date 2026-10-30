@@ -208,6 +208,14 @@ export function Projects({
                 </td>
                 <td>
                   <strong>{p.name}</strong>
+                  <div className="actions">
+                    <NavLink to={`/projects/${p.id}/messages`}>
+                      {t("messages")}
+                    </NavLink>
+                    <NavLink to={`/projects/${p.id}/requests`}>
+                      {t("requests")}
+                    </NavLink>
+                  </div>
                   <p>{p.description}</p>
                 </td>
                 <td>

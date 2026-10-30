@@ -1,5 +1,9 @@
 # Déploiement privé ForgeBridge — D1 / R2 / Access
 
+Avant de déployer la phase 4, suivre [les migrations contrôlées](docs/D1_AUTOMATION.md)
+et [le rapport de phase 4](docs/PHASE4_COMMUNICATIONS.md). La migration additive
+0006 doit suivre 0005 ; ne pas rejouer 0004 manuelle.
+
 ## Configuration active après raccordement manuel
 
 Le propriétaire a confirmé le fonctionnement de l’interface privée à

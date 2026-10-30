@@ -1,3 +1,4 @@
+import { MessageBody } from "../components/MessageBody";
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -696,7 +697,7 @@ function Message({
         </form>
       ) : (
         <>
-          <p>{message.body}</p>
+          <MessageBody body={message.body} />
           {actor === message.author_id && (
             <button onClick={() => setEditing(true)}>{t("editReply")}</button>
           )}
