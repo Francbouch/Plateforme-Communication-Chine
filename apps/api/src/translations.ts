@@ -167,11 +167,11 @@ export function translationRoutes(
     if (v.source_language === v.target_language)
       throw new HttpError(400, "translation_same_language");
     const glossary = await s.all<GlossaryEntry>(
-      `SELECT id,fr,en,zh_cn AS 'zh-CN',definition,domain,notes,version FROM translation_glossary WHERE organization_id=? AND project_id IS NULL AND deleted_at IS NULL AND (instr(lower(?),lower(fr))>0 OR instr(lower(?),lower(en))>0 OR instr(?,zh_cn)>0) ORDER BY id LIMIT 31`,
+      `SELECT id,fr,en,zh_cn AS 'zh-CN',definition,domain,notes,version FROM translation_glossary WHERE organization_id=? AND project_id IS NULL AND deleted_at IS NULL AND (instr(?,fr_fold)>0 OR instr(?,en_fold)>0 OR instr(?,zh_cn_fold)>0) ORDER BY id LIMIT 31`,
       src.organization_id,
-      src.text,
-      src.text,
-      src.text,
+      src.text.toLowerCase(),
+      src.text.toLowerCase(),
+      src.text.toLowerCase(),
     );
     if (glossary.length > 30)
       throw new HttpError(400, "translation_too_many_terms");
@@ -375,10 +375,10 @@ export function translationRoutes(
         c.req.query("page") ?? 0,
       );
     const rows = await s.all<GlossaryEntry>(
-      `SELECT id,fr,en,zh_cn AS 'zh-CN',definition,domain,notes,version FROM translation_glossary WHERE organization_id=? AND project_id IS NULL AND deleted_at IS NULL AND (?='' OR instr(lower(fr||' '||en||' '||zh_cn||' '||definition),lower(?))>0) AND (?='' OR domain=?) ORDER BY fr,id LIMIT 31 OFFSET ?`,
+      `SELECT id,fr,en,zh_cn AS 'zh-CN',definition,domain,notes,version FROM translation_glossary WHERE organization_id=? AND project_id IS NULL AND deleted_at IS NULL AND (?='' OR instr(search_fold,?)>0) AND (?='' OR domain=?) ORDER BY fr,id LIMIT 31 OFFSET ?`,
       org,
       q,
-      q,
+      q.toLowerCase(),
       domain,
       domain,
       page * 30,
@@ -394,7 +394,7 @@ export function translationRoutes(
     await s.write(
       [
         s.statement(
-          "INSERT INTO translation_glossary(id,organization_id,fr,en,zh_cn,definition,domain,notes,updated_by) VALUES(?,?,?,?,?,?,?,?,?)",
+          "INSERT INTO translation_glossary(id,organization_id,fr,en,zh_cn,definition,domain,notes,fr_fold,en_fold,zh_cn_fold,search_fold,updated_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
           id,
           org,
           v.fr,
@@ -403,6 +403,10 @@ export function translationRoutes(
           v.definition,
           v.domain,
           v.notes,
+          v.fr.toLowerCase(),
+          v.en.toLowerCase(),
+          v["zh-CN"].toLowerCase(),
+          [v.fr, v.en, v["zh-CN"], v.definition].join(" ").toLowerCase(),
           s.userId,
         ),
       ],
@@ -428,13 +432,19 @@ export function translationRoutes(
       const fields = method === "patch" ? parse(glossaryFields, input) : null;
       const statement = fields
         ? s.statement(
-            `UPDATE translation_glossary SET fr=?,en=?,zh_cn=?,definition=?,domain=?,notes=?,version=version+1,updated_by=?,updated_at=${time} WHERE id=? AND organization_id=? AND version=? AND deleted_at IS NULL`,
+            `UPDATE translation_glossary SET fr=?,en=?,zh_cn=?,definition=?,domain=?,notes=?,fr_fold=?,en_fold=?,zh_cn_fold=?,search_fold=?,version=version+1,updated_by=?,updated_at=${time} WHERE id=? AND organization_id=? AND version=? AND deleted_at IS NULL`,
             fields.fr,
             fields.en,
             fields["zh-CN"],
             fields.definition,
             fields.domain,
             fields.notes,
+            fields.fr.toLowerCase(),
+            fields.en.toLowerCase(),
+            fields["zh-CN"].toLowerCase(),
+            [fields.fr, fields.en, fields["zh-CN"], fields.definition]
+              .join(" ")
+              .toLowerCase(),
             s.userId,
             id,
             org,

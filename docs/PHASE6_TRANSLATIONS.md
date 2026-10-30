@@ -116,7 +116,9 @@ Au-delà du quota Free, l’erreur est affichée ; aucun abonnement n’est acti
 
 Glossaire : ajout/modification/suppression logique réservés au propriétaire,
 recherche, filtre par domaine exact, pagination de 30 éléments, version optimiste
-et audit. Les traductions et corrections existantes restent préservées.
+et audit. La recherche et la sélection des termes utilisent une casse Unicode
+normalisée côté Worker, y compris « Épaisseur / épaisseur », car `lower()` SQLite
+ne traite pas les accents. Les traductions et corrections existantes restent préservées.
 
 ## Configuration indispensable avant un essai réel
 
@@ -128,8 +130,8 @@ un fournisseur réel, abonnement ou paiement n’a donc été effectué.
    traducteur web. Ne pas fournir la clé dans le chat ou une variable Vite.
 2. Dans **le Worker forgebridge-api uniquement**, ajouter le secret serveur
    `DEEPL_API_KEY` (via le tableau de bord ou `wrangler secret put DEEPL_API_KEY`).
-3. Ajouter la variable serveur `TRANSLATION_ENABLED=true` lorsque l’activation est
-   voulue. Sans elle ou sans clé, les originaux restent lisibles et les nouvelles
+3. Après migration 0008 et publication du Worker, ajouter la variable serveur
+   `TRANSLATION_ENABLED=true` lorsque l’activation est voulue. Sans elle ou sans clé, les originaux restent lisibles et les nouvelles
    traductions renvoient une erreur explicite de configuration. Pour désactiver,
    définir `TRANSLATION_ENABLED=false` ; ne pas effacer D1.
 4. Facultatif : `TRANSLATION_DAILY_REQUESTS` (défaut 100, maximum 1 000),
@@ -149,11 +151,9 @@ simulé dans le Worker : il existe uniquement dans les fixtures de test.
 
 ## Validation
 
-`npm run verify` a réussi : TypeScript, ESLint, **89 tests Vitest dans 9 fichiers**,
+`npm run verify` a réussi : TypeScript, ESLint, **90 tests Vitest dans 9 fichiers**,
 build web, build Worker, **4 parcours preview et 17 parcours privés** (21 parcours
-navigateur). La phase ajoute 11 tests backend et 4 parcours navigateur. Après le
-dernier ajustement de version fournisseur, les 11 tests concernés, TypeScript et
-ESLint ont aussi été rejoués avec succès. Les tests utilisent des textes
+navigateur). La phase ajoute 12 tests backend et 4 parcours navigateur. La suite complète a été rejouée après le contrôle des accents français du glossaire. Les tests utilisent des textes
 non confidentiels, D1/R2 locaux isolés et un transport fournisseur déterministe situé
 dans `tests/helpers/translation-provider.ts`. Il exerce le véritable adaptateur
 DeepL sans aucune connexion externe. Ces résultats ne sont pas des traductions IA

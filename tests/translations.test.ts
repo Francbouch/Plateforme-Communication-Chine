@@ -456,7 +456,7 @@ async function revisionFixture() {
     .run();
   return { document, revision, objectKey, bytes };
 }
-it("translates PDF point title/description and replies and rejection/changes/cancellation reasons without touching geometry, decisions or R2", async () => {
+it("translates PDF point title/description and replies and rejection reasons without touching geometry, decisions or R2", async () => {
   const f = await revisionFixture(),
     point = crypto.randomUUID();
   await json(
@@ -634,4 +634,35 @@ it("deduplicates concurrent work and retains usable cache while provider configu
     (await json<{ enabled: boolean }>(await req("translations/config")))
       .enabled,
   ).toBe(false);
+});
+
+it("matches accented French glossary terms and search independently of letter case", async () => {
+  const m = await message("épaisseur 3 mm");
+  const fields = {
+    fr: "Épaisseur",
+    en: "Verified thickness",
+    "zh-CN": "已核实厚度",
+  };
+  const entry = await json<{ id: string }>(
+    await req(`organizations/${org}/glossary`, fields),
+  );
+  const list = await json<{ items: { id: string }[] }>(
+    await req(
+      `organizations/${org}/glossary?q=${encodeURIComponent("ÉPAISSEUR")}`,
+    ),
+  );
+  expect(list.items.map((v) => v.id)).toEqual([entry.id]);
+  expect((await json<TranslationResult>(await translate(m.id))).machine).toBe(
+    "Verified thickness 3 mm",
+  );
+  await json(
+    await req(
+      `organizations/${org}/glossary/${entry.id}`,
+      { ...fields, fr: "ÉPAISSEUR", en: "Revised thickness", version: 1 },
+      "PATCH",
+    ),
+  );
+  expect((await json<TranslationResult>(await translate(m.id))).machine).toBe(
+    "Revised thickness 3 mm",
+  );
 });

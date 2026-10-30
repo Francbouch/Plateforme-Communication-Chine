@@ -4,6 +4,8 @@ CREATE TABLE translation_glossary (
  project_id TEXT REFERENCES projects(id), -- reserved for future project-specific vocabulary
  fr TEXT NOT NULL CHECK(length(fr) BETWEEN 1 AND 160), en TEXT NOT NULL CHECK(length(en) BETWEEN 1 AND 160),
  zh_cn TEXT NOT NULL CHECK(length(zh_cn) BETWEEN 1 AND 160),
+ -- Unicode case folding is computed in the Worker: SQLite lower() is ASCII-only.
+ fr_fold TEXT NOT NULL, en_fold TEXT NOT NULL, zh_cn_fold TEXT NOT NULL, search_fold TEXT NOT NULL,
  definition TEXT NOT NULL DEFAULT '', domain TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '',
  version INTEGER NOT NULL DEFAULT 1, deleted_at TEXT,
  updated_by TEXT NOT NULL REFERENCES profiles(id), updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
