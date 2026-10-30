@@ -1,5 +1,10 @@
 # Déploiement privé ForgeBridge — D1 / R2 / Access
 
+Pour les mises à jour de la base existante (dont 0004 appliquée manuellement),
+suivre [le contrôle de migrations D1](docs/D1_AUTOMATION.md) avant tout
+déploiement. Ne pas lancer directement `migrations apply` tant que le journal
+n’a pas été réconcilié avec le schéma réel.
+
 ## Configuration active après raccordement manuel
 
 Le propriétaire a confirmé le fonctionnement de l’interface privée à
