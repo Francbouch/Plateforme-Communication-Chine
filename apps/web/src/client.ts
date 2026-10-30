@@ -1,3 +1,4 @@
+import { isDemo, demoRequest } from "./demo";
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -12,6 +13,7 @@ export async function api<T>(
   body?: unknown,
   method?: string,
 ): Promise<T> {
+  if (isDemo) return demoRequest<T>(path, body, method);
   const response = await fetch(`/api/v1/${path}`, {
     method: method ?? (body ? "POST" : "GET"),
     credentials: "same-origin",

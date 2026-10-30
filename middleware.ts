@@ -31,5 +31,13 @@ export async function protectOrigin(
   return next({ headers: { "Cache-Control": "private, no-store" } });
 }
 export default function middleware(request: Request) {
+  const path = new URL(request.url).pathname;
+  // Public UI demonstration only; API and private pages remain locked.
+  if (
+    path === "/demo" ||
+    path.startsWith("/demo/") ||
+    path.startsWith("/assets/")
+  )
+    return next();
   return protectOrigin(request, process.env.ORIGIN_SHARED_SECRET);
 }

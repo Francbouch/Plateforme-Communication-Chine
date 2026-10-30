@@ -50,3 +50,26 @@ test("SPA entry points load directly and expose real JavaScript assets", async (
   expect(asset.ok()).toBe(true);
   expect(asset.headers()["content-type"]).toMatch(/javascript/);
 });
+
+test("public demo renders existing UI without any backend request", async ({
+  page,
+}) => {
+  const apiCalls: string[] = [];
+  page.on("request", (request) => {
+    if (request.url().includes("/api/")) apiCalls.push(request.url());
+  });
+  await page.goto("/demo");
+  await expect(
+    page.getByText("Aperçu de démonstration", { exact: false }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Collection mobilier" }),
+  ).toBeVisible();
+  await page.goto("/demo/projects");
+  await expect(page.getByText("FB-001", { exact: true }).first()).toBeVisible();
+  await page.goto("/demo/admin");
+  await expect(
+    page.getByText("Visiteur démo", { exact: true }).first(),
+  ).toBeVisible();
+  expect(apiCalls).toEqual([]);
+});
