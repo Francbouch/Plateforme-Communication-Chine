@@ -1,9 +1,17 @@
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 import { readFile, readdir } from "node:fs/promises";
-export async function migrate(db: D1Database) {
+export async function migrate(
+  db: D1Database,
+  options: { after?: string; through?: string } = {},
+) {
   const directory = new URL("../../apps/api/migrations/", import.meta.url);
   for (const file of (await readdir(directory))
-    .filter((f) => f.endsWith(".sql"))
+    .filter(
+      (f) =>
+        f.endsWith(".sql") &&
+        (!options.after || f > options.after) &&
+        (!options.through || f <= options.through),
+    )
     .sort()) {
     let statement = "";
     for (const line of (await readFile(new URL(file, directory), "utf8")).split(

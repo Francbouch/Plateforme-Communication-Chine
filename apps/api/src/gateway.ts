@@ -68,7 +68,7 @@ export async function serveFrontend(
   output.set("X-Content-Type-Options", "nosniff");
   output.set(
     "Content-Security-Policy",
-    "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+    "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self' blob: data:; worker-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
   );
   return new Response(response.body, {
     status: response.status,

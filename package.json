@@ -28,6 +28,7 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "concurrently": "^9.2.1",
+    "esbuild": "^0.28.2",
     "eslint": "^9.39.0",
     "eslint-plugin-react-hooks": "^7.0.1",
     "miniflare": "^5.20261023.2-beta",

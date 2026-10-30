@@ -48,4 +48,5 @@ export class R2Storage implements PrivateStorage {
       await this.bucket.delete(key);
   }
 }
-// Adapter only. Upload, scan, finalization, grants and immutable revisions remain future work.
+// Low-level quarantine adapter retained for future scanning workflows.
+// Authenticated streaming uploads and immutable revision finalization live in documents.ts.

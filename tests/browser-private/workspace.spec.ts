@@ -18,7 +18,13 @@ test("real API/D1 workspace creates and persists an edited project across reload
   await expect(
     page.getByRole("combobox", { name: "Organisation", exact: true }),
   ).toContainText("Persistent browser workspace");
+  await page
+    .getByRole("combobox", { name: "Organisation", exact: true })
+    .selectOption({ label: "Persistent browser workspace" });
   await page.getByRole("link", { name: "Projets", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Projets", exact: true }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Créer", exact: true }).click();
   await page
     .getByRole("textbox", { name: "Code", exact: true })

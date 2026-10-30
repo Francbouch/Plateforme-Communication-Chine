@@ -197,7 +197,7 @@ export class Store {
     await this.requireOrg(org);
     const g = projectScope("p", this.userId);
     return this.all(
-      `SELECT p.* FROM projects p WHERE p.organization_id=? AND ${g.text} ORDER BY p.updated_at DESC,p.id LIMIT 200`,
+      `SELECT p.*,COALESCE(p.lifecycle_status,p.status) AS status,(SELECT count(*) FROM documents d WHERE d.project_id=p.id AND d.status<>'archived') AS document_count,(SELECT group_concat(s.name,', ') FROM project_suppliers ps JOIN suppliers s ON s.id=ps.supplier_id WHERE ps.project_id=p.id) AS supplier_names FROM projects p WHERE p.organization_id=? AND ${g.text} ORDER BY p.updated_at DESC,p.id LIMIT 200`,
       org,
       ...g.args,
     );
@@ -216,22 +216,24 @@ export class Store {
       : orgScope("?", this.userId, true);
     const statement = v.id
       ? this.statement(
-          `UPDATE projects SET code=?,name=?,description=?,status=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND organization_id=? AND ${g.text}`,
+          `UPDATE projects SET code=?,name=?,description=?,status=?,lifecycle_status=?,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=? AND organization_id=? AND ${g.text}`,
           v.code,
           v.name,
           v.description,
+          v.status === "completed" ? "paused" : v.status,
           v.status,
           id,
           v.organization_id,
           ...g.args,
         )
       : this.statement(
-          `INSERT INTO projects(id,organization_id,code,name,description,status) SELECT ?,?,?,?,?,? WHERE ${g.text}`,
+          `INSERT INTO projects(id,organization_id,code,name,description,status,lifecycle_status) SELECT ?,?,?,?,?,?,? WHERE ${g.text}`,
           id,
           v.organization_id,
           v.code,
           v.name,
           v.description,
+          v.status === "completed" ? "paused" : v.status,
           v.status,
           v.organization_id,
           ...g.args,

@@ -18,7 +18,9 @@ export const projectSchema = z.object({
     .regex(/^[A-Za-z0-9_-]+$/),
   name: z.string().trim().min(1).max(160),
   description: z.string().max(4000).default(""),
-  status: z.enum(["active", "paused", "archived"]).default("active"),
+  status: z
+    .enum(["active", "paused", "completed", "archived"])
+    .default("active"),
 });
 export const supplierSchema = z.object({
   name: z.string().trim().min(1).max(160),
@@ -63,6 +65,9 @@ export interface Project {
   description: string;
   status: string;
   updated_at: string;
+  created_at?: string;
+  document_count?: number;
+  supplier_names?: string;
 }
 export interface Supplier {
   id: string;

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, NavLink, Routes, Route } from "react-router";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
@@ -25,6 +25,9 @@ import { qc } from "./query";
 import type { Account, Project } from "./types";
 import { Field } from "./components/Field";
 import { Dashboard } from "./pages/Dashboard";
+const Documents = lazy(() =>
+  import("./pages/Documents").then((module) => ({ default: module.Documents })),
+);
 import { Projects } from "./pages/Projects";
 import { Admin } from "./pages/Admin";
 import "./i18n";
@@ -34,7 +37,12 @@ function App() {
   const [dark, setDark] = useState(
     localStorage.getItem("forgebridge.theme") === "dark",
   );
-  const [org, setOrg] = useState("");
+  const organizationKey = isDemo
+    ? "forgebridge.demo.organization"
+    : "forgebridge.organization";
+  const [org, setOrg] = useState(
+    () => localStorage.getItem(organizationKey) ?? "",
+  );
   const [languageError, setLanguageError] = useState(false);
   useEffect(() => {
     document.documentElement.dataset.theme = dark ? "dark" : "light";
@@ -50,6 +58,10 @@ function App() {
         setOrg(account.data.organizations[0]?.id ?? "");
     }
   }, [account.data, org]);
+  useEffect(() => {
+    if (account.data?.organizations.some((o) => o.id === org))
+      localStorage.setItem(organizationKey, org);
+  }, [account.data, org, organizationKey]);
   const preferredLanguage = account.data?.profile.language;
   useEffect(() => {
     if (preferredLanguage) void i18n.changeLanguage(preferredLanguage);
@@ -110,9 +122,9 @@ function App() {
               <NavLink key={key} to={path} end={path === "/"}>
                 <Icon size={18} />
                 <span>{t(key)}</span>
-                {!["dashboard", "projects", "admin"].includes(key) && (
-                  <span className="dot" title={t("soon")} />
-                )}
+                {!["dashboard", "projects", "admin", "documents"].includes(
+                  key,
+                ) && <span className="dot" title={t("soon")} />}
               </NavLink>
             ))}
           </nav>
@@ -210,6 +222,22 @@ function App() {
                     }
                   />
                   <Route
+                    path="/documents"
+                    element={
+                      <Suspense fallback={<p>{t("loading")}</p>}>
+                        <Documents projects={projects.data ?? []} />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/projects/:project/documents"
+                    element={
+                      <Suspense fallback={<p>{t("loading")}</p>}>
+                        <Documents projects={projects.data ?? []} />
+                      </Suspense>
+                    }
+                  />
+                  <Route
                     path="/admin"
                     element={
                       <Admin
@@ -221,7 +249,13 @@ function App() {
                   />
                   {nav
                     .filter(
-                      ([k]) => !["dashboard", "projects", "admin"].includes(k),
+                      ([k]) =>
+                        ![
+                          "dashboard",
+                          "projects",
+                          "admin",
+                          "documents",
+                        ].includes(k),
                     )
                     .map(([key]) => (
                       <Route
