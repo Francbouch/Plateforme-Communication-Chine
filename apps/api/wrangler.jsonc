@@ -3,9 +3,14 @@
   "name": "forgebridge-api",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-29",
-  "workers_dev": false,
+  "workers_dev": true,
+  // Preserve dashboard-managed Access/admin variables across Git deployments.
+  "keep_vars": true,
   "preview_urls": false,
-  "vars": { "APP_ORIGIN": "http://localhost:5173" },
+  "vars": {
+    "APP_ORIGIN": "https://forgebridge-api.francbouch.workers.dev",
+    "VERCEL_ORIGIN": "https://plateforme-communication-chine.vercel.app",
+  },
   "d1_databases": [
     {
       "binding": "DB",
@@ -22,5 +27,7 @@
     },
   ],
   // D1 ID supplied by the owner. Add the optional DOCUMENTS R2 binding only after its dedicated bucket exists.
-  // No public route is configured. See DEPLOYMENT.md before publishing.
+  // workers.dev is enabled behind the existing All traffic Cloudflare Access policy.
+  // ACCESS_*, ADMIN_* remain dashboard-managed; ORIGIN_SHARED_SECRET stays a secret.
+  // For local development override APP_ORIGIN via apps/api/.dev.vars.
 }

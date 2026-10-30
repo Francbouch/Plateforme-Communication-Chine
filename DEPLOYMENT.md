@@ -1,6 +1,37 @@
 # Déploiement privé ForgeBridge — D1 / R2 / Access
 
-## État et limites
+## Configuration active après raccordement manuel
+
+Le propriétaire a confirmé le fonctionnement de l’interface privée à
+`https://forgebridge-api.francbouch.workers.dev` et une réponse positive de
+`/api/v1/health`. Ces observations ne remplacent pas un test de sauvegarde en ligne.
+La D1 existante `forgebridge-db` est initialisée : ne pas la recréer ni rejouer
+le script d’initialisation pour une base vide.
+
+Le fichier Wrangler active maintenant `workers_dev: true`, garde les previews
+fermées et déclare les deux origines de production. La politique Access existante
+**All traffic** doit rester active ; elle est gérée séparément dans Cloudflare.
+`keep_vars: true` conserve les variables du tableau de bord lors des déploiements.
+Les variables explicitement déclarées dans `vars` restent pilotées par le dépôt.
+
+Dans **Runtime variables and secrets → Production**, conserver `ACCESS_ISSUER`,
+`ACCESS_AUD`, `ADMIN_EMAIL` (adresse vérifiée par Access) et `ADMIN_USER_ID`
+(UUID stable). `ORIGIN_SHARED_SECRET` reste un secret identique côté Vercel et
+Worker, jamais dans Git. Les variables de Builds ne configurent pas le Worker.
+Pour développer localement, placer `APP_ORIGIN=http://localhost:5173` dans
+`apps/api/.dev.vars` ignoré par Git, avec les autres paramètres locaux requis.
+
+Vérification après chaque déploiement : `/api/v1/health`, `/api/v1/me`, puis
+l’interface à la racine du Worker. Créer un projet de test, recharger et le modifier,
+puis recharger à nouveau pour confirmer la persistance sur la D1 distante.
+La route Vercel `/demo` contient uniquement des données fictives ; elle ne teste
+pas la connexion D1. Ses fichiers `/assets/` sont publics. Les autres pages et
+routes API restent protégées par le middleware.
+
+Les instructions suivantes décrivent aussi l’installation initiale : les étapes
+de création des ressources déjà présentes ne sont plus à effectuer.
+
+## État initial et limites
 
 Aucun service distant n’a été créé ou publié pendant cette migration. `wrangler whoami` ne trouvait aucune session Cloudflare ; aucun token Cloudflare/Vercel n’était configuré. Les identifiants de compte, UUID D1, domaines et AUD ne sont pas inventés. Le code est testé localement, pas en production. Ne pas utiliser de ressource du configurateur 3D.
 
@@ -21,7 +52,7 @@ npx wrangler r2 bucket create forgebridge-documents
 
 Vérifier l’offre, les quotas gratuits et l’éventuelle activation de facturation R2 avant de confirmer. Ne pas créer de ressource payante sans décision explicite. Aucun bucket R2 n’est requis pour les écrans actuels ; le binding prépare la suite. Désactiver tout domaine public/r2.dev et ne pas distribuer de clés S3.
 
-Dans `apps/api/wrangler.jsonc`, ajouter le **vrai** `database_id` retourné à l’entrée `DB`. Le nom logique est `forgebridge-db`, le bucket privé `forgebridge-documents`, les bindings sont `DB` et `DOCUMENTS`. Aucun faux UUID n’est livré. Préserver `workers_dev:false` et `preview_urls:false`. Ne pas publier avant d’avoir choisi les valeurs Access et préparé la protection.
+Dans `apps/api/wrangler.jsonc`, ajouter le **vrai** `database_id` retourné à l’entrée `DB`. Le nom logique est `forgebridge-db`, le bucket privé `forgebridge-documents`, les bindings sont `DB` et `DOCUMENTS`. Aucun faux UUID n’est livré. Lors de la préparation initiale, garder le Worker fermé ; la configuration active ci-dessus utilise maintenant `workers_dev:true` derrière Access et `preview_urls:false`. Ne pas publier avant d’avoir choisi les valeurs Access et préparé la protection.
 
 ```sh
 # Racine du dépôt, validation locale préalable
@@ -48,7 +79,7 @@ Définir **la même valeur** `ORIGIN_SHARED_SECRET` :
 - dans Vercel, variable **serveur uniquement**, sur chaque environnement déployé (Preview et Production concernés) ;
 - dans le Worker, via `wrangler secret put ORIGIN_SHARED_SECRET` ou le tableau de bord.
 
-Aucune variable VITE n’est requise. Supprimer les anciennes variables `VITE_SUPABASE_*`, `SUPABASE_*` et `VITE_API_BASE_URL` de la configuration active ForgeBridge. Ne pas toucher aux variables d’un autre projet. `middleware.ts` protège tous les chemins Vercel ; sans le secret, le site répond 503 ; sans preuve valide, 403. Ne pas ajouter d’exception `/assets` ou `/index.html`.
+Aucune variable VITE n’est requise. Supprimer les anciennes variables `VITE_SUPABASE_*`, `SUPABASE_*` et `VITE_API_BASE_URL` de la configuration active ForgeBridge. Ne pas toucher aux variables d’un autre projet. `middleware.ts` protège les chemins privés Vercel (exceptions : `/demo`, ses sous-routes et `/assets/`) ; sans le secret, le site répond 503 ; sans preuve valide, 403. Ne pas ajouter d’exception `/index.html` ni aux routes API.
 
 Suivre VERCEL.md pour publier un aperçu **protégé**, après autorisation. Récupérer son hôte HTTPS canonique sans redirection. L’URL directe doit rester interdite à un navigateur anonyme. Si la protection Vercel native empêche aussi les appels de passerelle, ne pas contourner le verrou : ajuster cette protection selon les capacités de l’offre tout en conservant et testant le middleware d’origine. Ne payer aucun supplément automatiquement.
 
