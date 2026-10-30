@@ -1,5 +1,5 @@
 import { it, expect, vi, afterEach } from "vitest";
-import { protectOrigin } from "../middleware";
+import middleware, { protectOrigin } from "../middleware";
 import { assetKey } from "../apps/api/src/storage";
 import { api, ApiError } from "../apps/web/src/client";
 afterEach(() => vi.unstubAllGlobals());
@@ -31,13 +31,11 @@ it("generates opaque scoped R2 keys without allowing traversal", () => {
   expect(() => assetKey({ ...ids, projectId: "../../other" })).toThrow();
 });
 it("uses same-origin Access cookies without identity or secrets supplied by React", async () => {
-  const fetch = vi
-    .fn()
-    .mockResolvedValue(
-      new Response('{"ok":true}', {
-        headers: { "Content-Type": "application/json" },
-      }),
-    );
+  const fetch = vi.fn().mockResolvedValue(
+    new Response('{"ok":true}', {
+      headers: { "Content-Type": "application/json" },
+    }),
+  );
   vi.stubGlobal("fetch", fetch);
   await expect(api("projects", { name: "Project" })).resolves.toEqual({
     ok: true,
@@ -67,4 +65,20 @@ it("reports failed persistence and non-JSON Access redirects as errors", async (
   vi.stubGlobal("fetch", fetch);
   await expect(api("projects", {})).rejects.toThrow("Write failed");
   await expect(api("me")).rejects.toBeInstanceOf(ApiError);
+});
+
+it("opens only the demo and static assets, keeping API and private pages locked", async () => {
+  for (const path of ["/demo", "/demo/projects", "/assets/app.js"]) {
+    expect(
+      (
+        await middleware(new Request(`https://origin.vercel.app${path}`))
+      ).headers.get("x-middleware-next"),
+    ).toBe("1");
+  }
+  for (const path of ["/", "/api/v1/me", "/projects", "/demolition"]) {
+    expect(
+      (await middleware(new Request(`https://origin.vercel.app${path}`)))
+        .status,
+    ).toBeGreaterThanOrEqual(400);
+  }
 });

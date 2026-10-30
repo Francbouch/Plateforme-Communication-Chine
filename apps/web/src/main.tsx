@@ -20,6 +20,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { api } from "./client";
+import { isDemo } from "./demo";
 import { qc } from "./query";
 import type { Account, Project } from "./types";
 import { Field } from "./components/Field";
@@ -149,6 +150,12 @@ function App() {
             </div>
           </header>
           <main>
+            {isDemo && (
+              <p className="notice" role="status">
+                Aperçu de démonstration · Données fictives · Aucune connexion
+                requise · Modifications limitées à cet onglet.
+              </p>
+            )}
             {languageError && <p role="alert">{t("error")}</p>}
             {account.isError ? (
               <section className="notice" role="alert">
@@ -252,7 +259,7 @@ function App() {
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <QueryClientProvider client={qc}>
-      <BrowserRouter>
+      <BrowserRouter basename={isDemo ? "/demo" : "/"}>
         <App />
       </BrowserRouter>
     </QueryClientProvider>
