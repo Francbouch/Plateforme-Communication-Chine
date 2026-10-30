@@ -6,7 +6,7 @@ function samplePdf(text: string) {
     "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
     "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
   ];
-  const stream = `BT /F1 16 Tf 25 150 Td (${text}) Tj ET`;
+  const stream = `BT /F1 16 Tf 25 250 Td (${text}) Tj ET`;
   objects.push(
     `<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`,
   );
@@ -51,6 +51,9 @@ test("private library persists folders, R2 PDF originals and revisions through r
   await expect(orgSelector).toContainText("Document browser workspace");
   await orgSelector.selectOption({ label: "Document browser workspace" });
   await page.getByRole("link", { name: "Projets", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Projets", exact: true }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Créer", exact: true }).click();
   await page.getByRole("textbox", { name: "Code", exact: true }).fill("DOCS-1");
   await page
@@ -116,6 +119,27 @@ test("private library persists folders, R2 PDF originals and revisions through r
   await detail
     .getByRole("button", { name: "Ajuster à la largeur", exact: true })
     .click();
+  await expect
+    .poll(async () =>
+      detail.locator("canvas").evaluate((node: HTMLCanvasElement) => {
+        const pixels = node
+          .getContext("2d")!
+          .getImageData(0, 0, node.width, node.height).data;
+        let dark = 0;
+        for (let i = 0; i < pixels.length; i += 4)
+          if (
+            pixels[i + 3] > 0 &&
+            pixels[i] + pixels[i + 1] + pixels[i + 2] < 600 &&
+            ++dark > 100
+          )
+            return true;
+        return false;
+      }),
+    )
+    .toBe(true);
+  await detail.evaluate((node) => {
+    node.scrollTop = 0;
+  });
   await page.screenshot({ path: "test-results/phase2-pdf.png" });
   const download = page.waitForEvent("download");
   await detail.getByRole("link", { name: "Télécharger l’original" }).click();
