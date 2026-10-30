@@ -221,5 +221,6 @@
   "reviewSaved": "已保存",
   "reviewNotSaved": "保存失败",
   "commentPage": "评论页码",
-  "geometryUpdated": "已更改批注位置或尺寸。"
+  "geometryUpdated": "已更改批注位置或尺寸。",
+  "annotatingRevision": "批注 — 修订 {{revision}}"
 }

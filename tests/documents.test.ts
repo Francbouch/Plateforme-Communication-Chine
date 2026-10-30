@@ -773,3 +773,100 @@ describe("phase 3 review on actual workerd D1 and private R2", () => {
     ).toBe(0);
   });
 });
+
+it("supports independent annotation CRUD and threads on every A/B/C/D revision", async () => {
+  const first = await reserve();
+  await content(first.id);
+  const a = await complete(first.id);
+  const revisions = [a.revision_id];
+  for (const label of ["B", "C", "D"]) {
+    const u = await reserve({ document_id: a.id, label });
+    await content(u.id);
+    revisions.push((await complete(u.id)).revision_id);
+  }
+  const kept: string[] = [];
+  for (const revision of revisions) {
+    const body = {
+      page: 1,
+      type: "marker",
+      color: "red",
+      geometry: { points: [[0.2, 0.6]] },
+      summary: `Point on ${revision}`,
+    };
+    const point = await json<{ id: string; revision_id: string }>(
+      await req(`revisions/${revision}/review-items`, {
+        ...body,
+        id: crypto.randomUUID(),
+      }),
+    );
+    expect(point.revision_id).toBe(revision);
+    kept.push(point.id);
+    await json(
+      await req(
+        `review-items/${point.id}`,
+        { version: 1, geometry: { points: [[0.4, 0.5]] }, color: "green" },
+        "PATCH",
+      ),
+    );
+    const reply = crypto.randomUUID();
+    await json(
+      await req(`review-items/${point.id}/messages`, {
+        id: reply,
+        body: `Reply on ${revision}`,
+      }),
+    );
+    await json(
+      await req(
+        `review-messages/${reply}`,
+        { version: 1, body: `Edited reply on ${revision}` },
+        "PATCH",
+      ),
+    );
+    await json(
+      await req(
+        `review-items/${point.id}`,
+        { version: 2, status: "waiting" },
+        "PATCH",
+      ),
+    );
+    const removed = await json<{ id: string }>(
+      await req(`revisions/${revision}/review-items`, {
+        ...body,
+        id: crypto.randomUUID(),
+      }),
+    );
+    await json(
+      await req(
+        `review-items/${removed.id}`,
+        { version: 1, annotation_deleted: true },
+        "PATCH",
+      ),
+    );
+  }
+  for (let i = 0; i < revisions.length; i++) {
+    const rows = await json<{
+      items: {
+        id: string;
+        geometry: { points: number[][] };
+        color: string;
+        revision_id: string;
+      }[];
+    }>(await req(`revisions/${revisions[i]}/annotations?page_number=1`));
+    expect(rows.items).toHaveLength(1);
+    expect(rows.items[0]).toMatchObject({
+      id: kept[i],
+      revision_id: revisions[i],
+      color: "green",
+      geometry: { points: [[0.4, 0.5]] },
+    });
+    const detail = await json<{
+      item: { status: string };
+      messages: { body: string }[];
+    }>(await req(`review-items/${kept[i]}`));
+    expect(detail.item.status).toBe("waiting");
+    expect(detail.messages[0].body).toBe(`Edited reply on ${revisions[i]}`);
+    expect(await (await req(`revisions/${revisions[i]}/content`)).text()).toBe(
+      new TextDecoder().decode(bytes),
+    );
+  }
+});
