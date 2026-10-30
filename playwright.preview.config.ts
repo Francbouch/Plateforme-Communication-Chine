@@ -2,6 +2,8 @@ import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: "tests/browser",
   use: {
+    trace: "retain-on-failure",
+    screenshot: "only-on-failure",
     baseURL: "http://127.0.0.1:4173",
     launchOptions: {
       executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE,
@@ -13,5 +15,9 @@ export default defineConfig({
     url: "http://127.0.0.1:4173",
     reuseExistingServer: false,
   },
-  reporter: "list",
+  outputDir: "test-results/preview",
+  reporter: [
+    ["list"],
+    ["json", { outputFile: "test-results/preview-results.json" }],
+  ],
 });

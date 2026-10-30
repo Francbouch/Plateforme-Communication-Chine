@@ -30,11 +30,22 @@ Les tests navigateur nécessitent Chromium système au chemin indiqué, ou Playw
 
 Configurer les valeurs Worker listées dans [.env.example](.env.example), migrer D1 local et utiliser `npm run dev`. Les commandes ne fabriquent pas de session : sans JWT Access valide, l’API locale refuse les requêtes et le frontend affiche « Accès privé requis ». Pour des opérations interactives réelles, utiliser le domaine privé configuré selon [DEPLOYMENT.md](DEPLOYMENT.md), ou un tunnel local protégé par une application Access dédiée. Ne jamais exposer le serveur Vite de développement sur Internet.
 
+## Phase 3 : révision technique
+
+La visionneuse PDF propose annotations normalisées, points numérotés, commentaires
+et réponses, statuts et historique, et remplacement de pages avec aperçu puis
+nouvelle révision. [PHASE3.md](PHASE3.md) décrit le fonctionnement, la migration
+`0004_pdf_review.sql` **à appliquer avant fusion**, les preuves et limites.
+
+`npm run verify` exécute désormais la validation complète. GitHub Actions reprend
+cette chaîne en isolation ; traces et captures sont conservées lors des échecs.
+La règle de développement autonome est enregistrée dans [AGENTS.md](AGENTS.md).
+
 ## Fonctionnalités et limites
 
 Fonctionnel en tests locaux : organisation, profil/préférences, projets, fournisseurs et notes internes, association projet-fournisseur, rôles/activation, invitations préparatoires/révocation, audit/outbox. L’interface conserve ses trois langues, thème et navigation. Les sauvegardes échouées ne sont pas présentées comme réussies.
 
-La phase 2 ajoute la bibliothèque documentaire persistante : dossiers, importations R2 privées (50 Mio par fichier), PDF.js, images, téléchargements, révisions immuables, statuts et historique, recherche/filtres paginés. Voir [PHASE2.md](PHASE2.md) pour la migration additive et le raccordement du bucket avant fusion. Annotations, notifications, approbations complètes et messagerie restent à développer. Les invitations ne peuvent pas encore être acceptées et aucun fournisseur ne peut ouvrir de session.
+La phase 2 ajoute la bibliothèque documentaire persistante : dossiers, importations R2 privées (50 Mio par fichier), PDF.js, images, téléchargements, révisions immuables, statuts et historique, recherche/filtres paginés. Voir [PHASE2.md](PHASE2.md) pour la migration additive et le raccordement du bucket avant fusion. Notifications, approbations complètes et messagerie restent à développer. Les annotations et discussions techniques sont livrées dans la phase 3. Les invitations ne peuvent pas encore être acceptées et aucun fournisseur ne peut ouvrir de session.
 
 Le propriétaire a déjà raccordé Access, Vercel et D1 et confirmé la sauvegarde de ses projets. Le bucket R2 et la migration documentaire restent à raccorder avant le déploiement de la phase 2 ; cette session n’a pas d’accès distant Cloudflare/Vercel. La confidentialité du **déploiement réel** doit être vérifiée après configuration d’Access et du verrou Vercel ; les tests locaux ne la prouvent pas.
 

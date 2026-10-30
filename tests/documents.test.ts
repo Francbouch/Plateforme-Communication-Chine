@@ -459,3 +459,317 @@ it("adds the library schema without losing pre-phase-2 projects or memberships",
     await legacy.runtime.dispose();
   }
 });
+
+describe("phase 3 review on actual workerd D1 and private R2", () => {
+  it("persists numbered review items and discussions without changing original bytes", async () => {
+    const upload = await reserve();
+    await content(upload.id);
+    const revision = await complete(upload.id);
+    const meta = await json<{
+      document_id: string;
+      label: string;
+      object_key?: string;
+    }>(await req(`revisions/${revision.revision_id}`));
+    expect(meta.document_id).toBe(revision.id);
+    expect(meta.label).toBe("A");
+    expect(meta.object_key).toBeUndefined();
+    const itemId = crypto.randomUUID();
+    const point = await json<{ id: string; number: number; version: number }>(
+      await req(`revisions/${revision.revision_id}/review-items`, {
+        id: itemId,
+        page: 3,
+        type: "marker",
+        color: "red",
+        geometry: { points: [[0.25, 0.7]] },
+        summary: "Increase hole diameter to 8 mm",
+      }),
+    );
+    expect(point.number).toBe(1);
+    const replay = await json<{ number: number }>(
+      await req(`revisions/${revision.revision_id}/review-items`, {
+        id: itemId,
+        page: 3,
+        type: "marker",
+        color: "red",
+        geometry: { points: [[0.25, 0.7]] },
+      }),
+    );
+    expect(replay.number).toBe(1);
+    await json(
+      await req(
+        `review-items/${itemId}`,
+        {
+          version: 1,
+          color: "blue",
+          status: "in_progress",
+          geometry: { points: [[0.3, 0.6]] },
+        },
+        "PATCH",
+      ),
+    );
+    const message = crypto.randomUUID();
+    await json(
+      await req(`review-items/${itemId}/messages`, {
+        id: message,
+        body: "Changed in revision B",
+      }),
+    );
+    await json(
+      await req(
+        `review-messages/${message}`,
+        { version: 1, body: "Changed and verified in revision B" },
+        "PATCH",
+      ),
+    );
+    const detail = await json<{
+      item: { geometry: { points: number[][] }; version: number };
+      messages: { body: string; version: number }[];
+      history: { action: string; payload: string }[];
+    }>(await req(`review-items/${itemId}`));
+    expect(detail.item.geometry.points).toEqual([[0.3, 0.6]]);
+    expect(detail.messages[0]).toMatchObject({
+      body: "Changed and verified in revision B",
+      version: 2,
+    });
+    expect(
+      detail.history.some(
+        (e) =>
+          e.action === "reply.updated" &&
+          e.payload.includes("Changed in revision B"),
+      ),
+    ).toBe(true);
+    expect(
+      (
+        await req(
+          `review-items/${itemId}`,
+          { version: 1, summary: "Stale overwrite" },
+          "PATCH",
+        )
+      ).status,
+    ).toBe(409);
+    expect(
+      await (await req(`revisions/${revision.revision_id}/content`)).text(),
+    ).toBe(new TextDecoder().decode(bytes));
+    await runtime.dispose();
+    runtime = makeRuntime();
+    const restored = await json<{ item: { summary: string } }>(
+      await req(`review-items/${itemId}`),
+    );
+    expect(restored.item.summary).toBe("Increase hole diameter to 8 mm");
+  });
+  it("keeps historical numbers, resolved threads and independent revision spaces", async () => {
+    const u = await reserve();
+    await content(u.id);
+    const a = await complete(u.id);
+    const first = await json<{ id: string }>(
+      await req(`revisions/${a.revision_id}/review-items`, {
+        id: crypto.randomUUID(),
+        page: 1,
+        type: "rectangle",
+        geometry: {
+          points: [
+            [0.1, 0.1],
+            [0.4, 0.5],
+          ],
+        },
+      }),
+    );
+    await json(
+      await req(
+        `review-items/${first.id}`,
+        { version: 1, annotation_deleted: true },
+        "PATCH",
+      ),
+    );
+    const second = await json<{ id: string; number: number }>(
+      await req(`revisions/${a.revision_id}/review-items`, {
+        id: crypto.randomUUID(),
+        page: 2,
+        type: "marker",
+        geometry: { points: [[0.7, 0.2]] },
+        summary: "Check support",
+      }),
+    );
+    expect(second.number).toBe(2);
+    await json(
+      await req(
+        `review-items/${second.id}`,
+        { version: 1, status: "resolved" },
+        "PATCH",
+      ),
+    );
+    expect(
+      (
+        await json<{ items: unknown[] }>(
+          await req(`documents/${a.id}/review-items?hide_resolved=1`),
+        )
+      ).items,
+    ).toHaveLength(1);
+    expect(
+      (
+        await json<{ items: unknown[] }>(
+          await req(
+            `documents/${a.id}/review-items?status=resolved&page_number=2`,
+          ),
+        )
+      ).items,
+    ).toHaveLength(1);
+    expect(
+      (
+        await json<{ items: unknown[] }>(
+          await req(`revisions/${a.revision_id}/annotations?page_number=1`),
+        )
+      ).items,
+    ).toHaveLength(0);
+    const newUpload = await reserve({ document_id: a.id, label: "B" });
+    await content(newUpload.id);
+    const b = await complete(newUpload.id);
+    expect(
+      (
+        await json<{ items: unknown[] }>(
+          await req(`revisions/${b.revision_id}/annotations?page_number=2`),
+        )
+      ).items,
+    ).toHaveLength(0);
+    expect(
+      (
+        await json<{ items: unknown[] }>(
+          await req(`revisions/${a.revision_id}/annotations?page_number=2`),
+        )
+      ).items,
+    ).toHaveLength(1);
+    const third = await json<{ number: number }>(
+      await req(`revisions/${b.revision_id}/review-items`, {
+        id: crypto.randomUUID(),
+        page: 1,
+        type: "discussion",
+        geometry: { points: [] },
+        summary: "New revision discussion",
+      }),
+    );
+    expect(third.number).toBe(3);
+    await expect(
+      db.prepare("DELETE FROM review_items WHERE id=?").bind(first.id).run(),
+    ).rejects.toThrow("preserved");
+  });
+  it("validates normalized coordinates and enforces access and authorship", async () => {
+    const u = await reserve();
+    await content(u.id);
+    const revision = await complete(u.id);
+    for (const geometry of [
+      { points: [[-0.1, 0.4]] },
+      { points: [[1.2, 0.5]] },
+      { points: [] },
+      {
+        points: [
+          [0.1, 0.2],
+          [0.4, 0.5],
+        ],
+      },
+    ])
+      expect(
+        (
+          await req(`revisions/${revision.revision_id}/review-items`, {
+            id: crypto.randomUUID(),
+            page: 1,
+            type: "marker",
+            geometry,
+          })
+        ).status,
+      ).toBe(400);
+    const annotation = await json<{ id: string }>(
+      await req(`revisions/${revision.revision_id}/review-items`, {
+        id: crypto.randomUUID(),
+        page: 1,
+        type: "arrow",
+        geometry: {
+          points: [
+            [0.1, 0.2],
+            [0.4, 0.5],
+          ],
+        },
+      }),
+    );
+    const other = crypto.randomUUID();
+    await db
+      .prepare("INSERT INTO profiles(id,name) VALUES(?,?)")
+      .bind(other, "Future other author")
+      .run();
+    const message = crypto.randomUUID();
+    await db
+      .prepare(
+        "INSERT INTO review_messages(id,item_id,body,author_id) VALUES(?,?,?,?)",
+      )
+      .bind(message, annotation.id, "Another author's reply", other)
+      .run();
+    expect(
+      (
+        await req(
+          `review-messages/${message}`,
+          { version: 1, body: "Forbidden edit" },
+          "PATCH",
+        )
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await runtime.dispatchFetch(
+          `${origin}/api/v1/revisions/${revision.revision_id}/annotations?page_number=1`,
+        )
+      ).status,
+    ).toBe(401);
+    await db
+      .prepare(
+        "UPDATE organization_memberships SET active=0 WHERE organization_id=? AND user_id=?",
+      )
+      .bind(org, admin)
+      .run();
+    expect((await req(`review-items/${annotation.id}`)).status).toBe(403);
+    expect(
+      (
+        await req(
+          `review-items/${annotation.id}`,
+          { version: 1, status: "resolved" },
+          "PATCH",
+        )
+      ).status,
+    ).toBe(403);
+  });
+  it("rolls back review edits if immutable history cannot be written", async () => {
+    const u = await reserve();
+    await content(u.id);
+    const revision = await complete(u.id),
+      id = crypto.randomUUID();
+    await db
+      .prepare(
+        "CREATE TRIGGER test_review_fail BEFORE INSERT ON review_events BEGIN SELECT RAISE(ABORT,'test history failure'); END;",
+      )
+      .run();
+    expect(
+      (
+        await req(`revisions/${revision.revision_id}/review-items`, {
+          id,
+          page: 1,
+          type: "marker",
+          geometry: { points: [[0.5, 0.5]] },
+        })
+      ).status,
+    ).toBe(503);
+    expect(
+      (
+        await db
+          .prepare("SELECT count(*) AS n FROM review_items WHERE id=?")
+          .bind(id)
+          .first<{ n: number }>()
+      )?.n,
+    ).toBe(0);
+    expect(
+      (
+        await db
+          .prepare("SELECT review_counter FROM documents WHERE id=?")
+          .bind(revision.id)
+          .first<{ review_counter: number }>()
+      )?.review_counter,
+    ).toBe(0);
+  });
+});
