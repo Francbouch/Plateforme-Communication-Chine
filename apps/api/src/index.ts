@@ -1,3 +1,4 @@
+import { communicationRoutes } from "./messages";
 import { reviewRoutes } from "./review";
 import { documentRoutes } from "./documents";
 import { Hono } from "hono";
@@ -40,7 +41,9 @@ export function createApp(
   );
   app.use("*", (c, next) =>
     c.req.method === "PUT" &&
-    /^\/api\/v1\/uploads\/[^/]+\/content$/.test(c.req.path)
+    /^\/api\/v1\/(?:uploads|message-attachments)\/[^/]+\/content$/.test(
+      c.req.path,
+    )
       ? next()
       : bodyLimit({
           maxSize: 32768,
@@ -264,6 +267,7 @@ export function createApp(
   );
   app.route("/", documentRoutes());
   app.route("/", reviewRoutes());
+  app.route("/", communicationRoutes());
   app.all("/api/*", () => {
     throw new HttpError(404, "Not found");
   });

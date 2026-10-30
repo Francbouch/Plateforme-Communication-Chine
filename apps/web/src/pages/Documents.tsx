@@ -245,6 +245,32 @@ export function Documents({ projects }: { projects: Project[] }) {
       ),
     enabled: enabled && !!selected,
   });
+  // Stable message links select the requested revision explicitly, never the latest.
+  const linkedDocument = search.get("document"),
+    linkedRevision = search.get("revision"),
+    linkedPoint = search.get("point"),
+    linkedPage = search.get("pdf_page");
+  useEffect(() => {
+    if (!linkedDocument) return;
+    setSelected(linkedDocument);
+    setViewRevision(linkedRevision ?? "");
+    setReviewTarget(
+      linkedRevision
+        ? {
+            revision_id: linkedRevision,
+            page: Math.max(1, Number(linkedPage) || 1),
+            id: linkedPoint ?? "",
+          }
+        : null,
+    );
+  }, [
+    linkedDocument,
+    linkedRevision,
+    linkedPage,
+    linkedPoint,
+    project,
+    folder,
+  ]);
   const targetedRevision = useQuery({
     queryKey: ["revision-meta", viewRevision],
     queryFn: () => api<Revision>(`revisions/${viewRevision}`),
@@ -259,6 +285,11 @@ export function Documents({ projects }: { projects: Project[] }) {
         ? targetedRevision.data
         : undefined))
     : detail.data?.revisions[0];
+  const linkedUnavailable =
+    !!viewRevision &&
+    !current &&
+    !targetedRevision.isPending &&
+    !detail.isPending;
   const refresh = async () => {
     await Promise.all([
       client.invalidateQueries({ queryKey: ["folders"] }),
@@ -1059,6 +1090,9 @@ export function Documents({ projects }: { projects: Project[] }) {
                     {t("next")}
                   </button>
                 </div>
+                {linkedUnavailable && (
+                  <p role="alert">{t("referenceUnavailable")}</p>
+                )}
                 {current && (
                   <>
                     <p>{current.change_description}</p>

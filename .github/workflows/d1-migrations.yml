@@ -1,0 +1,71 @@
+name: ForgeBridge D1 migration gate
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      deploy_worker:
+        description: Deploy the protected Worker after successful migrations
+        type: boolean
+        default: false
+permissions:
+  contents: read
+# All production migration/deploy workflows must share this group. Never cancel a migration.
+concurrency:
+  group: forgebridge-production-d1
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: npm ci
+      - run: python3 -m unittest discover -s scripts/d1 -p 'test_*.py' -v
+      - run: python3 scripts/d1/integration.py
+      - run: npx playwright install --with-deps chromium
+      - run: npm run verify
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: migration-gate-test-evidence
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore
+          retention-days: 7
+  migrate:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: npm ci
+      - name: Inspect, reconcile manual migrations and apply pending migrations
+        run: python3 scripts/d1/migrate.py --remote --apply
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || '5b91da32c6ac0121968ee821e875ce7d' }}
+      # Same checkout and job: no deploy can run after a failed migration/post-check.
+      - name: Deploy Worker only when explicitly requested
+        if: github.event_name == 'workflow_dispatch' && inputs.deploy_worker
+        run: npm run deploy -w @forgebridge/api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || '5b91da32c6ac0121968ee821e875ce7d' }}

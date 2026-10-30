@@ -28,6 +28,12 @@ import { Dashboard } from "./pages/Dashboard";
 const Documents = lazy(() =>
   import("./pages/Documents").then((module) => ({ default: module.Documents })),
 );
+const Messages = lazy(() =>
+  import("./pages/Messages").then((m) => ({ default: m.Messages })),
+);
+const Requests = lazy(() =>
+  import("./pages/Requests").then((m) => ({ default: m.Requests })),
+);
 import { Projects } from "./pages/Projects";
 import { Admin } from "./pages/Admin";
 import "./i18n";
@@ -122,9 +128,14 @@ function App() {
               <NavLink key={key} to={path} end={path === "/"}>
                 <Icon size={18} />
                 <span>{t(key)}</span>
-                {!["dashboard", "projects", "admin", "documents"].includes(
-                  key,
-                ) && <span className="dot" title={t("soon")} />}
+                {![
+                  "dashboard",
+                  "projects",
+                  "admin",
+                  "documents",
+                  "messages",
+                  "requests",
+                ].includes(key) && <span className="dot" title={t("soon")} />}
               </NavLink>
             ))}
           </nav>
@@ -237,6 +248,31 @@ function App() {
                       </Suspense>
                     }
                   />
+                  {["/messages", "/projects/:project/messages"].map((path) => (
+                    <Route
+                      key={path}
+                      path={path}
+                      element={
+                        <Suspense fallback={<p>{t("loading")}</p>}>
+                          <Messages
+                            projects={projects.data ?? []}
+                            actor={account.data.profile.id}
+                          />
+                        </Suspense>
+                      }
+                    />
+                  ))}
+                  {["/requests", "/projects/:project/requests"].map((path) => (
+                    <Route
+                      key={path}
+                      path={path}
+                      element={
+                        <Suspense fallback={<p>{t("loading")}</p>}>
+                          <Requests projects={projects.data ?? []} />
+                        </Suspense>
+                      }
+                    />
+                  ))}
                   <Route
                     path="/admin"
                     element={
@@ -255,6 +291,8 @@ function App() {
                           "projects",
                           "admin",
                           "documents",
+                          "messages",
+                          "requests",
                         ].includes(k),
                     )
                     .map(([key]) => (
