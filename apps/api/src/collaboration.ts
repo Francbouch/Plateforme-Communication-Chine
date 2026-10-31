@@ -159,34 +159,47 @@ export function collaborationRoutes() {
       q,
       page(c) * 30,
     );
-    const items = [];
-    for (const m of rows.slice(0, 30)) {
-      const files = await s.all(
-        "SELECT id,filename,size,extension FROM message_attachments WHERE message_id=? AND state='attached'",
-        m.id,
-      );
-      const refs = await s.all<{
-        document_id: string | null;
-        revision_id: string | null;
-        point_id: string | null;
-        page: number | null;
-      }>(
-        "SELECT document_id,revision_id,point_id,page FROM message_references WHERE message_id=?",
-        m.id,
-      );
-      const references = [];
-      for (const ref of refs) {
-        try {
-          if (ref.point_id) await pointAccess(s, ref.point_id);
-          else if (ref.revision_id) await revisionAccess(s, ref.revision_id);
-          else if (ref.document_id) await documentAccess(s, ref.document_id);
-          references.push(ref);
-        } catch {
-          /* No label, title, ID or URL for an inaccessible reference. */
-        }
-      }
-      items.push({ ...m, attachments: files, references });
-    }
+    const visible = rows.slice(0, 30),
+      ids = JSON.stringify(visible.map((m) => m.id));
+    const files = await s.all<{
+      message_id: string;
+      id: string;
+      filename: string;
+      size: number;
+      extension: string;
+    }>(
+      "SELECT message_id,id,filename,size,extension FROM message_attachments WHERE message_id IN(SELECT value FROM json_each(?)) AND state='attached'",
+      ids,
+    );
+    const references = r.access.permissions.view_documents
+      ? await s.all<{
+          message_id: string;
+          document_id: string;
+          revision_id: string | null;
+          point_id: string | null;
+          page: number | null;
+        }>(
+          `SELECT f.message_id,f.document_id,f.revision_id,f.point_id,f.page FROM message_references f JOIN documents d ON d.id=f.document_id LEFT JOIN document_revisions rev ON rev.id=f.revision_id AND rev.document_id=d.id LEFT JOIN review_items point ON point.id=f.point_id AND point.document_id=d.id AND point.revision_id=rev.id WHERE f.message_id IN(SELECT value FROM json_each(?)) AND d.project_id=? AND (f.revision_id IS NULL OR rev.id IS NOT NULL) AND (f.point_id IS NULL OR (point.is_point=1 AND point.point_deleted_at IS NULL)) AND (?=0 OR (d.externally_shared=1 AND (f.revision_id IS NULL OR EXISTS(SELECT 1 FROM revision_shares rs WHERE rs.revision_id=rev.id)) AND (f.point_id IS NULL OR point.publication='published')))`,
+          ids,
+          r.access.id,
+          Number(r.access.external),
+        )
+      : [];
+    const items = visible.map((m) => ({
+      ...m,
+      attachments: files
+        .filter((f) => f.message_id === m.id)
+        .map(({ message_id, ...f }) => {
+          void message_id;
+          return f;
+        }),
+      references: references
+        .filter((f) => f.message_id === m.id)
+        .map(({ message_id, ...f }) => {
+          void message_id;
+          return f;
+        }),
+    }));
     return c.json({ items, hasMore: rows.length > 30, page: page(c) });
   });
   app.get("/attachments/:id/content", async (c) => {
@@ -220,28 +233,23 @@ export function collaborationRoutes() {
   app.get("/projects/:project/requests", async (c) => {
     const s = c.get("store"),
       a = await membership(s, c.req.param("project"), "view_conversations");
-    const rows = await s.all<{ message_id: string }>(
-      "SELECT id,title,description,status,priority,due_date,message_id,created_by,assignee_id FROM technical_requests WHERE project_id=? AND (?=0 OR assignee_id=? OR created_by=?) ORDER BY updated_at DESC LIMIT 31 OFFSET ?",
-      a.id,
-      Number(a.external),
-      s.userId,
-      s.userId,
-      page(c) * 30,
+    return list(
+      c,
+      `SELECT t.id,t.title,t.description,t.status,t.priority,t.due_date,t.message_id,t.created_by,t.assignee_id FROM technical_requests t JOIN conversation_messages m ON m.id=t.message_id JOIN project_conversations conv ON conv.id=m.conversation_id AND conv.project_id=t.project_id WHERE t.project_id=? AND m.deleted_at IS NULL AND (m.shared=1 OR (m.author_id=? AND ?=0)) AND (?=0 OR (conv.externally_shared=1 AND (t.assignee_id=? OR t.created_by=?))) ORDER BY t.updated_at DESC,t.id LIMIT 31 OFFSET ?`,
+      [
+        a.id,
+        s.userId,
+        Number(a.external),
+        Number(a.external),
+        s.userId,
+        s.userId,
+      ],
     );
-    const items = [];
-    for (const row of rows.slice(0, 30)) {
-      try {
-        await messageAccess(s, row.message_id);
-        items.push(row);
-      } catch {
-        /* Source visibility is mandatory. */
-      }
-    }
-    return c.json({ items, hasMore: rows.length > 30, page: page(c) });
   });
   app.get("/projects/:project/approvals", async (c) => {
     const s = c.get("store"),
       a = await membership(s, c.req.param("project"), "view_approvals");
+    if (!a.permissions.view_documents) throw unavailable();
     return list(
       c,
       `SELECT a.id,a.title,a.description,a.status,a.revision_id,a.document_id,a.version,a.decision_comment,a.decision_identity,a.approver_id,r.label AS revision_label,d.name AS document_name FROM approval_requests a JOIN document_revisions r ON r.id=a.revision_id JOIN documents d ON d.id=a.document_id WHERE a.project_id=? AND a.deleted_at IS NULL AND a.status<>'draft' AND (?=0 OR (a.externally_shared=1 AND a.approver_id=? AND ${docsVisible})) ORDER BY a.number DESC LIMIT 31 OFFSET ?`,

@@ -44,7 +44,7 @@ function accessFromRow(
       "correct_translations",
     ] as const)
       permissions[key] = false;
-  if (r.supplier_id) permissions.manage_members = false;
+  if (r.supplier_id && !owner) permissions.manage_members = false;
   if (!permissions.view_project || !permissions[permission])
     throw unavailable();
   return {
@@ -53,7 +53,7 @@ function accessFromRow(
     code: r.code,
     name: r.name,
     role,
-    external: !!r.supplier_id || role === "reviewer",
+    external: !owner && (!!r.supplier_id || role === "reviewer"),
     permissions,
   };
 }

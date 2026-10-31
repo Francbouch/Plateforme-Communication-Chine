@@ -11,6 +11,7 @@ export type Account = {
   organizations: Organization[];
   is_primary_admin?: boolean;
   mode?: string;
+  access_controls_ready?: boolean;
 };
 export type Invite = {
   id: string;

@@ -25,7 +25,8 @@ export function Admin({
   const { t, i18n } = useTranslation();
   const client = useQueryClient();
   const collaborative =
-    client.getQueryData<Account>(["me"])?.mode === "collaborative";
+    client.getQueryData<Account>(["me"])?.mode === "collaborative" ||
+    !!client.getQueryData<Account>(["me"])?.access_controls_ready;
   const [message, setMessage] = useState("");
   const [token, setToken] = useState("");
   const [edit, setEdit] = useState<Supplier | null | undefined>();

@@ -158,6 +158,13 @@ export function createApp(
     c.set("principal", principal);
     const store = new Store(c.env.DB, principal.id, identity);
     store.multiuser = c.env.MULTIUSER_ENABLED === "true";
+    store.accessSchema =
+      store.multiuser ||
+      !!(await c.env.DB.prepare(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='access_invitations'",
+      ).first());
+    store.ownerOnly =
+      store.accessSchema && principal.id === c.env.ADMIN_USER_ID;
     c.set("store", store);
     if (
       c.req.path.startsWith("/api/v1/") &&
@@ -211,8 +218,7 @@ export function createApp(
     const s = c.get("store"),
       org = id(c.req.query("organization_id"));
     await s.requireOrg(org);
-    const { projectScope } = await import("./database");
-    const g = projectScope("p", s.userId);
+    const g = s.scopeProject("p");
     const q = (c.req.query("q") ?? "").slice(0, 160);
     const status = c.req.query("status") ?? "";
     const page =
@@ -268,7 +274,7 @@ export function createApp(
     c.json(await c.get("store").members(id(c.req.query("organization_id")))),
   );
   app.patch("/api/v1/organization_memberships/:user", async (c) => {
-    if (c.env.MULTIUSER_ENABLED === "true")
+    if (c.get("store").accessSchema)
       throw new HttpError(409, "Use reviewed project access controls");
     const v = await body(
       c,
@@ -299,7 +305,7 @@ export function createApp(
     );
   });
   app.patch("/api/v1/projects/:id/collaborators/:user", async (c) => {
-    if (c.env.MULTIUSER_ENABLED === "true")
+    if (c.get("store").accessSchema)
       throw new HttpError(409, "Use reviewed project access controls");
     const v = await body(
       c,

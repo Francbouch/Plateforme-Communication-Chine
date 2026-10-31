@@ -36,7 +36,7 @@ beforeAll(async () => {
     .sign(key.privateKey);
   const result = await build({
     stdin: {
-      contents: `import {DeepLFreeProvider} from './apps/api/src/translation/provider';import {simulatedDeepLFetch} from './tests/helpers/translation-provider';import {createApp} from './apps/api/src/index';import {AccessIdentityProvider} from './apps/api/src/identity';import {createLocalJWKSet} from 'jose';export default createApp(new AccessIdentityProvider(createLocalJWKSet({keys:[${JSON.stringify({ ...jwk, kid: "test", alg: "RS256" })}]})),fetch,env=>new DeepLFreeProvider(env.DEEPL_API_KEY,simulatedDeepLFetch),async(input,init)=>{if(String(input)!=="https://api.resend.com/emails")throw new Error("Unexpected test mail destination");const payload=JSON.parse(String(init.body));return new Response(JSON.stringify({id:"simulated-not-sent"}),{status:payload.to[0].startsWith("mail-ok")?200:503,headers:{"Content-Type":"application/json"}});});`,
+      contents: `import {DeepLFreeProvider} from './apps/api/src/translation/provider';import {simulatedDeepLFetch} from './tests/helpers/translation-provider';import {createApp} from './apps/api/src/index';import {AccessIdentityProvider} from './apps/api/src/identity';import {createLocalJWKSet} from 'jose';const app=createApp(new AccessIdentityProvider(createLocalJWKSet({keys:[${JSON.stringify({ ...jwk, kid: "test", alg: "RS256" })}]})),fetch,env=>new DeepLFreeProvider(env.DEEPL_API_KEY,simulatedDeepLFetch),async(input,init)=>{if(String(input)!=="https://api.resend.com/emails")throw new Error("Unexpected test mail destination");const payload=JSON.parse(String(init.body));return new Response(JSON.stringify({id:"simulated-not-sent"}),{status:payload.to[0].startsWith("mail-ok")?200:503,headers:{"Content-Type":"application/json"}});});export default {async fetch(request,env,ctx){let queries=0;const DB=new Proxy(env.DB,{get(raw,name){const value=Reflect.get(raw,name);if(name==='prepare')return(...args)=>{queries++;return raw.prepare(...args);};return typeof value==='function'?value.bind(raw):value;}});const res=await app.fetch(request,{...env,DB},ctx);const headers=new Headers(res.headers);headers.set('X-Test-D1-Statements',String(queries));return new Response(res.body,{status:res.status,headers});}};`,
       resolveDir: process.cwd(),
     },
     bundle: true,
@@ -1210,4 +1210,189 @@ it("rechecks resource visibility for idempotent legacy writes and uploads after 
   expect(
     new Uint8Array(await (await storage.get(f.key))!.arrayBuffer()),
   ).toEqual(f.bytes);
+});
+it("does not give the primary administrator owner privileges in another organization where they were invited as a supplier", async () => {
+  const owner = crypto.randomUUID(),
+    foreign = crypto.randomUUID(),
+    foreignProject = crypto.randomUUID(),
+    sp = crypto.randomUUID(),
+    email = "other-owner@example.test";
+  await db.batch([
+    db
+      .prepare("INSERT INTO profiles(id,email,name) VALUES(?,?,?)")
+      .bind(owner, email, "Other owner"),
+    db
+      .prepare(
+        "INSERT INTO identity_links(provider,issuer,subject,user_id) VALUES(?,?,?,?)",
+      )
+      .bind("cloudflare-access", issuer, email, owner),
+    db
+      .prepare("INSERT INTO organizations(id,name) VALUES(?,'Other company')")
+      .bind(foreign),
+    db
+      .prepare(
+        "INSERT INTO organization_memberships(organization_id,user_id,role) VALUES(?,?,'owner')",
+      )
+      .bind(foreign, owner),
+    db
+      .prepare(
+        "INSERT INTO projects(id,organization_id,code,name) VALUES(?,?,'OTHERORG','Other company project')",
+      )
+      .bind(foreignProject, foreign),
+    db
+      .prepare(
+        "INSERT INTO suppliers(id,organization_id,name,country,language) VALUES(?,?,'Partner','CN','en')",
+      )
+      .bind(sp, foreign),
+    db
+      .prepare(
+        "INSERT INTO project_suppliers(organization_id,project_id,supplier_id) VALUES(?,?,?)",
+      )
+      .bind(foreign, foreignProject, sp),
+  ]);
+  const other = await jwt(email),
+    i = await json<{ invitation_url: string }>(
+      await as(other, `access/organizations/${foreign}/invitations`, {
+        email: "library@example.test",
+        role: "supplier_engineer",
+        supplier_id: sp,
+        project_ids: [foreignProject],
+      }),
+    );
+  await json(
+    await req("access/invitations/accept", {
+      token: new URL(i.invitation_url).hash.slice(12),
+    }),
+  );
+  const originalProject = project;
+  project = foreignProject;
+  const f = await drawing();
+  project = originalProject;
+  for (const path of [
+    `projects/${foreignProject}/documents`,
+    `documents/${f.document}`,
+    `revisions/${f.revision}/content`,
+    `projects/search?organization_id=${foreign}&q=Other`,
+    `suppliers?organization_id=${foreign}`,
+  ])
+    expect((await req(path)).status, path).toBe(404);
+  expect((await req(`collaboration/documents/${f.document}`)).status).toBe(404);
+  await json(
+    await as(
+      other,
+      `access/documents/${f.document}/sharing`,
+      { shared: true, revision_ids: [f.revision] },
+      "PATCH",
+    ),
+  );
+  expect(
+    (await req(`collaboration/revisions/${f.revision}/content`)).status,
+  ).toBe(200);
+  expect((await req(`projects/${project}/documents`)).status).toBe(200);
+  await runtime.dispose();
+  runtime = makeRuntime({ MULTIUSER_ENABLED: "false" });
+  db = (await runtime.getD1Database("DB")) as unknown as D1Database;
+  expect((await req(`documents/${f.document}`)).status).toBe(403);
+  expect((await req("me")).status).toBe(200);
+});
+it("filters private requests before pagination and bounds database work when a full message page has many references", async () => {
+  const a = await enroll("a@example.test", "designer"),
+    sp = await supplier("A"),
+    f = await drawing();
+  await share(f);
+  const conv = await conversation(true);
+  for (let n = 0; n < 31; n++) {
+    const id = crypto.randomUUID();
+    await json(
+      await as(a.session, `conversations/${conv}/messages`, {
+        id,
+        body: "Private internal " + n,
+        shared: false,
+      }),
+    );
+    await json(
+      await as(a.session, `messages/${id}/requests`, {
+        title: "Private request " + n,
+      }),
+    );
+  }
+  for (let n = 0; n < 30; n++)
+    await json(
+      await req(`conversations/${conv}/messages`, {
+        id: crypto.randomUUID(),
+        body: "Public referenced message " + n,
+        shared: true,
+        references: [
+          { document_id: f.document, revision_id: f.revision, page: 1 },
+          { document_id: f.document },
+        ],
+      }),
+    );
+  const i = await invite("a@example.test", "supplier_engineer", sp);
+  await json(
+    await as(a.session, "access/invitations/accept", {
+      token: new URL(i.invitation_url).hash.slice(12),
+    }),
+  );
+  const requests = await json<{ items: unknown[]; hasMore: boolean }>(
+    await as(a.session, `collaboration/projects/${project}/requests`),
+  );
+  expect(requests.items).toEqual([]);
+  expect(requests.hasMore).toBe(false);
+  const response = await as(
+    a.session,
+    `collaboration/conversations/${conv}/messages`,
+  );
+  expect(
+    Number(response.headers.get("X-Test-D1-Statements")),
+  ).toBeLessThanOrEqual(15);
+  const result = await json<{ items: { references: unknown[] }[] }>(response);
+  expect(result.items).toHaveLength(30);
+  expect(result.items.every((m) => m.references.length === 2)).toBe(true);
+});
+it("keeps internal glossary terms and their cached translations private from external members", async () => {
+  const actor = await enroll(
+    "a@example.test",
+    "supplier_engineer",
+    await supplier("A"),
+  );
+  const message = await send(await conversation(true), "Charnière 3 mm");
+  await json(
+    await req(`organizations/${org}/glossary`, {
+      fr: "Charnière",
+      en: "Private hinge",
+      "zh-CN": "内部铰链",
+      domain: "Mécanique",
+      notes: "Internal terminology",
+    }),
+  );
+  const body = {
+    kind: "message",
+    id: message,
+    field: "body",
+    source_language: "fr",
+    target_language: "en",
+  };
+  const internal = await json<{ id: string; machine: string }>(
+    await req("translations", body),
+  );
+  expect(internal.machine).toBe("Private hinge 3 mm");
+  expect(
+    (await as(actor.session, `organizations/${org}/glossary`)).status,
+  ).toBe(404);
+  const external = await json<{ id: string; machine: string }>(
+    await as(actor.session, "translations", body),
+  );
+  expect(external.machine).toBe("Hinge 3 mm");
+  expect(external.id).not.toBe(internal.id);
+  expect(
+    (
+      await as(
+        actor.session,
+        `translations/${internal.id}`,
+        { body: "Correction 3 mm", version: 0 },
+        "PATCH",
+      )
+    ).status,
+  ).toBe(409);
 });

@@ -407,7 +407,7 @@ describe("real D1 and signed Access boundary", () => {
           "PATCH",
         )
       ).status,
-    ).toBe(403);
+    ).toBe(409);
     env.RATE_LIMITER = { limit: async () => ({ success: false }) };
     expect((await request("me")).status).toBe(429);
   });

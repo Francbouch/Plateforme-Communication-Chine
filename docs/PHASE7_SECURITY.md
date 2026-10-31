@@ -183,7 +183,7 @@ L’administrateur dispose de « Utilisateurs et accès » dans l’administrati
 invitations, renvoi/révocation, membres, rôles, permissions, révocation des sessions,
 partage exact des révisions, conversations, approbateur et assignation de demandes,
 événements de sécurité. Les anciens contrôles de modification des rôles sont
-remplacés en mode collaboratif pour ne pas conserver deux chemins de gestion.
+remplacés dès que le schéma 0009 est présent, pour ne pas conserver deux chemins de gestion.
 
 Les autres membres reçoivent un espace réduit aux projets et fonctions autorisés,
 avec documents/PDF, points et commentaires, conversations et demandes, décisions
@@ -193,6 +193,16 @@ est enregistrée sur son propre profil. Les erreurs d’écriture conservent les
 saisis. Les lectures sont paginées et ne chargent pas les fichiers R2 pour compter
 ou rechercher. La sélection des projets utilise un contrôle SQL commun en une
 requête, sans une requête de permission supplémentaire par projet.
+
+Les messages regroupent leurs références et pièces jointes en requêtes bornées ;
+les demandes privées sont filtrées avant pagination. Le compte administrateur initial
+ne reçoit aucun privilège de propriétaire dans une autre organisation où il est
+fournisseur, y compris lorsque le mode multiutilisateur est désactivé après 0009.
+
+Le glossaire brut est réservé au propriétaire. Les traductions externes utilisent
+uniquement le texte partagé, sans termes du glossaire interne. Leur cache est distinct
+lorsque ces termes interviennent ; une correction recontrôle le contexte courant
+et refuse un ancien cache interne. Aucun partage de glossaire implicite.
 
 ## Déploiement préparé, non exécuté
 
@@ -282,9 +292,9 @@ nécessite une vérification du propriétaire, pas un bypass administrateur publ
 ## Validation et limites
 
 Validation locale du 30 octobre 2026 : `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/usr/bin/chromium npm run verify`
-a réussi avec TypeScript, ESLint, **107 tests Vitest dans 10 fichiers**, builds web
+a réussi avec TypeScript, ESLint, **110 tests Vitest dans 10 fichiers**, builds web
 et Worker, **4 parcours preview et 21 parcours privés** (25 au total). Cette phase
-ajoute **17 scénarios backend et 4 parcours navigateur multiutilisateurs**.
+ajoute **20 scénarios backend et 4 parcours navigateur multiutilisateurs**.
 
 Les **13 tests Python** du contrôle de migration ont réussi, y compris le refus
 d’une application distante sans revue/sauvegarde, l’inspection sans écriture et le

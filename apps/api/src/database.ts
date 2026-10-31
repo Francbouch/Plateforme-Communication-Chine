@@ -91,13 +91,18 @@ export async function resolvePrincipal(
 export class Store {
   delegated?: { project: string; permission: Permission };
   multiuser = false;
+  ownerOnly = false;
+  accessSchema = false;
   constructor(
     readonly db: D1Database,
     readonly userId: string,
     readonly identity?: Identity,
   ) {}
   scopeProject(alias: string, admin = false): Scope {
-    if (!this.delegated) return projectScope(alias, this.userId, admin);
+    if (!this.delegated)
+      return this.ownerOnly
+        ? orgScope(`${alias}.organization_id`, this.userId, true)
+        : projectScope(alias, this.userId, admin);
     const g = projectScope(alias, this.userId, false);
     return {
       text: `(${g.text} AND ${alias}.id=? AND EXISTS(SELECT 1 FROM project_memberships gate WHERE gate.project_id=${alias}.id AND gate.user_id=? AND gate.active=1 AND gate.access_enabled=1 AND json_extract(gate.permissions,?)=1))`,
@@ -116,7 +121,7 @@ export class Store {
     return (await this.statement(text, ...args).all<T>()).results;
   }
   async requireOrg(org: string, owner = false) {
-    const g = orgScope("o.id", this.userId, owner);
+    const g = orgScope("o.id", this.userId, owner || this.ownerOnly);
     const row = await this.statement(
       `SELECT o.id FROM organizations o WHERE o.id=? AND ${g.text}`,
       org,
@@ -183,6 +188,7 @@ export class Store {
       organizations,
       mode: this.multiuser ? "collaborative" : "private-developer",
       supplier_accounts_enabled: this.multiuser,
+      access_controls_ready: this.accessSchema,
     };
   }
   async createOrganization(name: string) {
@@ -221,7 +227,7 @@ export class Store {
   }
   async projects(org: string) {
     await this.requireOrg(org);
-    const g = projectScope("p", this.userId);
+    const g = this.scopeProject("p");
     return this.all(
       `SELECT p.*,COALESCE(p.lifecycle_status,p.status) AS status,(SELECT count(*) FROM documents d WHERE d.project_id=p.id AND d.status<>'archived') AS document_count,(SELECT group_concat(s.name,', ') FROM project_suppliers ps JOIN suppliers s ON s.id=ps.supplier_id WHERE ps.project_id=p.id) AS supplier_names FROM projects p WHERE p.organization_id=? AND ${g.text} ORDER BY p.updated_at DESC,p.id LIMIT 200`,
       org,
@@ -238,7 +244,7 @@ export class Store {
   }) {
     const id = v.id ?? crypto.randomUUID();
     const g = v.id
-      ? projectScope("projects", this.userId, true)
+      ? this.scopeProject("projects", true)
       : orgScope("?", this.userId, true);
     const statement = v.id
       ? this.statement(

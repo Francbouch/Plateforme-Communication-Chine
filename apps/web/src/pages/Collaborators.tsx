@@ -37,7 +37,7 @@ export function Collaborators({
     }
   }
   const account = client.getQueryData<Account>(["me"]);
-  if (account?.mode === "collaborative")
+  if (account?.mode === "collaborative" || account?.access_controls_ready)
     return <ProjectMembers project={project} actor={account.profile.id} />;
   return (
     <section className="panel">
