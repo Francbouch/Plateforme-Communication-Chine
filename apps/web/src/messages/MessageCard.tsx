@@ -1,3 +1,4 @@
+import { userError } from "../errors";
 import { MessageApprovals } from "../approvals/MessageApprovals";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -48,7 +49,7 @@ export function MessageCard({
       setEditing(false);
       onChange();
     } catch (e) {
-      setError(e instanceof Error ? e.message : t("error"));
+      setError(userError(e, t));
     } finally {
       setSaving(false);
     }

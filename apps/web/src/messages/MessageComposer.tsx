@@ -1,3 +1,4 @@
+import { userError } from "../errors";
 import { useState, useRef, useEffect, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
@@ -103,7 +104,7 @@ export function MessageComposer({
       ) {
         setError(t("fileAlreadyInLibrary"));
         setPicker(true);
-      } else setError(e instanceof Error ? e.message : t("error"));
+      } else setError(userError(e, t));
     } finally {
       setBusy(false);
       void client.invalidateQueries({ queryKey: ["message-uploads", project] });
@@ -118,7 +119,7 @@ export function MessageComposer({
         old.map((f) => (f.id === item.id ? { ...f, ready: true } : f)),
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : t("error"));
+      setError(userError(e, t));
     } finally {
       setBusy(false);
       void client.invalidateQueries({ queryKey: ["message-uploads", project] });
@@ -130,7 +131,7 @@ export function MessageComposer({
       await api(`message-attachments/${item.id}`, undefined, "DELETE");
       setFiles((old) => old.filter((f) => f.id !== item.id));
     } catch (e) {
-      setError(e instanceof Error ? e.message : t("error"));
+      setError(userError(e, t));
     } finally {
       setBusy(false);
       void client.invalidateQueries({ queryKey: ["message-uploads", project] });
@@ -163,7 +164,7 @@ export function MessageComposer({
       setFiles([]);
       onSent();
     } catch (e) {
-      setError(e instanceof Error ? e.message : t("error"));
+      setError(userError(e, t));
     } finally {
       setBusy(false);
       void client.invalidateQueries({ queryKey: ["message-uploads", project] });

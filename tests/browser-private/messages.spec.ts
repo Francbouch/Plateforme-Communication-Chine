@@ -1,3 +1,4 @@
+import fr from "../../apps/web/src/locales/fr-CA.json" with { type: "json" };
 import { test, expect, type Page } from "@playwright/test";
 test.use({ actionTimeout: 10000, navigationTimeout: 15000 });
 import { PDFDocument } from "@cantoo/pdf-lib";
@@ -419,9 +420,7 @@ test("failed sends preserve drafts, Enter sends once, Shift+Enter inserts a line
   await input.press("Shift+Enter");
   await input.pressSequentially("Deuxième ligne");
   await input.press("Enter");
-  await expect(pane(page).getByRole("alert")).toHaveText(
-    "Simulated temporary outage",
-  );
+  await expect(pane(page).getByRole("alert")).toHaveText(fr.requestFailed);
   await expect(input).toHaveValue("Décision à conserver\nDeuxième ligne");
   await input.press("Enter");
   await expect(

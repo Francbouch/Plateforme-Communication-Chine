@@ -1,3 +1,4 @@
+import { userError } from "../errors";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
@@ -105,7 +106,7 @@ export function ApprovalForm({
       ]);
       onSaved(detail?.approval.id ?? result.id!);
     } catch (e) {
-      setError(e instanceof Error ? e.message : t("error"));
+      setError(userError(e, t));
     } finally {
       setBusy(false);
     }

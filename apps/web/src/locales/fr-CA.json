@@ -538,5 +538,13 @@
   "selectSupplier": "Choisir un fournisseur",
   "selectDocument": "Choisir un document",
   "access_request_assignee": "Responsable de la demande",
-  "access_assign_request": "Assigner la demande"
+  "access_assign_request": "Assigner la demande",
+  "sessionExpired": "Votre session a expiré. Votre saisie reste affichée ; copiez-la avant de vous reconnecter.",
+  "sessionReconnect": "Se reconnecter",
+  "permissionChanged": "Cette ressource est indisponible ou vos droits ont changé.",
+  "requestConflict": "Ces données ont changé. Actualisez avant de réessayer.",
+  "requestTooLarge": "Le fichier ou la demande dépasse la taille autorisée.",
+  "requestRateLimited": "Trop de demandes. Patientez avant de réessayer.",
+  "offlineError": "Connexion interrompue. Vérifiez votre réseau puis réessayez.",
+  "requestFailed": "L’opération a échoué. Vos modifications ne sont pas confirmées. Réessayez."
 }

@@ -1,3 +1,4 @@
+import fr from "../../apps/web/src/locales/fr-CA.json" with { type: "json" };
 import { test, expect, type Page } from "@playwright/test";
 import { PDFDocument } from "@cantoo/pdf-lib";
 import type { ApprovalDetail } from "../../packages/shared/src/approvals";
@@ -432,9 +433,7 @@ test("uses existing conversation and technical request context, displays decisio
   await form
     .getByRole("button", { name: "Confirmer et enregistrer", exact: true })
     .click();
-  await expect(detail(page).getByRole("alert")).toHaveText(
-    "Simulated approval outage",
-  );
+  await expect(detail(page).getByRole("alert")).toHaveText(fr.requestFailed);
   expect((await load(page)).approval.status).toBe("pending");
   await expect(form.getByRole("textbox")).toHaveValue(
     "Décision interne explicite",

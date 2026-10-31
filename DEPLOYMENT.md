@@ -1,5 +1,11 @@
 # Déploiement privé ForgeBridge — D1 / R2 / Access
 
+Phase 8 : voir le [rapport de stabilisation et récupération](docs/PHASE8_STABILIZATION.md).
+Aucune nouvelle migration ; utiliser le runner contrôlé pour la D1 existante.
+La préparation d’un export de restauration et le contrôle séparé des objets R2
+sont décrits dans ce rapport. Les étapes de création ci-dessous sont historiques
+et ne doivent pas être rejouées sur les ressources existantes.
+
 Phase 5 : appliquer la migration additive 0007 via le contrôle existant avant
 de publier le Worker correspondant. Voir [approbations internes et tests](docs/PHASE5_APPROVALS.md).
 
@@ -57,22 +63,21 @@ npx wrangler d1 create forgebridge-db
 npx wrangler r2 bucket create forgebridge-documents
 ```
 
-Vérifier l’offre, les quotas gratuits et l’éventuelle activation de facturation R2 avant de confirmer. Ne pas créer de ressource payante sans décision explicite. Aucun bucket R2 n’est requis pour les écrans actuels ; le binding prépare la suite. Désactiver tout domaine public/r2.dev et ne pas distribuer de clés S3.
+Vérifier l’offre, les quotas gratuits et l’éventuelle activation de facturation R2 avant de confirmer. Ne pas créer de ressource payante sans décision explicite. Le bucket R2 est requis pour les originaux documentaires et les pièces jointes actuels. Désactiver tout domaine public/r2.dev et ne pas distribuer de clés S3.
 
 Dans `apps/api/wrangler.jsonc`, ajouter le **vrai** `database_id` retourné à l’entrée `DB`. Le nom logique est `forgebridge-db`, le bucket privé `forgebridge-documents`, les bindings sont `DB` et `DOCUMENTS`. Aucun faux UUID n’est livré. Lors de la préparation initiale, garder le Worker fermé ; la configuration active ci-dessus utilise maintenant `workers_dev:true` derrière Access et `preview_urls:false`. Ne pas publier avant d’avoir choisi les valeurs Access et préparé la protection.
 
 ```sh
 # Racine du dépôt, validation locale préalable
 npm ci
-npm run db:migrate
+python3 scripts/d1/migrate.py --apply
 npm run typecheck
 npm run lint
 npm test
 npm run build
 npm run build:worker
-# apps/api : appliquer seulement à la nouvelle D1 ForgeBridge vérifiée
-cd apps/api
-npx wrangler d1 migrations apply forgebridge-db --remote
+# Racine du dépôt : inspection et réconciliation contrôlées, revue/sauvegarde requises pour 0009
+python3 scripts/d1/migrate.py --remote --apply
 ```
 
 Les migrations sont incrémentales et suivies par Wrangler. Ne pas utiliser de reset destructif. Si une ancienne base contient des données réelles, préparer séparément un export/import en lecture seule puis une validation sur une nouvelle D1 ; aucun import automatique n’est inclus.

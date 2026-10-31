@@ -1,8 +1,9 @@
+import { userError } from "../errors";
 import { AccessManager } from "../access/AccessManager";
 import { Glossary } from "../translations/Glossary";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, ApiError } from "../client";
+import { api } from "../client";
 import {
   roles,
   type Project,
@@ -54,11 +55,7 @@ export function Admin({
       setMessage(t("success"));
       await client.invalidateQueries();
     } catch (e) {
-      setMessage(
-        e instanceof ApiError
-          ? `${t("error")} (${e.status}): ${e.message}`
-          : t("error"),
-      );
+      setMessage(userError(e, t));
     }
   }
   return (

@@ -1,3 +1,4 @@
+import { privateFileResponse } from "./private-file";
 import { Hono } from "hono";
 import { z } from "zod";
 import { Store } from "./database";
@@ -631,49 +632,7 @@ export function documentRoutes() {
         }>();
     if (!r) throw new HttpError(404, "Revision not found");
     await documentRow(s, r.document_id);
-    const b = bucket(c.env),
-      range = c.req.header("Range");
-    // PDF.js can request byte ranges; authenticate every request and never redirect to R2.
-    let options: R2GetOptions | undefined;
-    if (range) {
-      const m = /^bytes=(\d+)-(\d*)$/.exec(range);
-      if (!m)
-        return new Response(null, {
-          status: 416,
-          headers: { "Content-Range": `bytes */${r.size}` },
-        });
-      const start = Number(m[1]),
-        end = m[2] ? Math.min(Number(m[2]), r.size - 1) : r.size - 1;
-      if (start > end || start >= r.size)
-        return new Response(null, {
-          status: 416,
-          headers: { "Content-Range": `bytes */${r.size}` },
-        });
-      options = { range: { offset: start, length: end - start + 1 } };
-    }
-    const object = await b.get(r.object_key, options);
-    if (!object) throw new HttpError(404, "File not found in storage");
-    const headers = new Headers({
-      "Content-Type": r.content_type,
-      "Cache-Control": "private, no-store",
-      "X-Content-Type-Options": "nosniff",
-      "Accept-Ranges": "bytes",
-      "Content-Security-Policy": "default-src 'none'; sandbox",
-    });
-    headers.set(
-      "Content-Disposition",
-      `${c.req.query("download") === "1" || !["pdf", "png", "jpg", "jpeg", "webp"].includes(r.extension) ? "attachment" : "inline"}; filename*=UTF-8''${encodeURIComponent(r.filename)}`,
-    );
-    if (object.range && "offset" in object.range) {
-      const offset = object.range.offset ?? 0,
-        length = object.range.length ?? r.size;
-      headers.set(
-        "Content-Range",
-        `bytes ${offset}-${offset + length - 1}/${r.size}`,
-      );
-      headers.set("Content-Length", String(length));
-    } else headers.set("Content-Length", String(r.size));
-    return new Response(object.body, { status: options ? 206 : 200, headers });
+    return privateFileResponse(c.req.raw, c.env.DOCUMENTS, r);
   });
   return app;
 }

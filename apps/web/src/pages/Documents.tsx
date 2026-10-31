@@ -1,3 +1,5 @@
+import { userError } from "../errors";
+import type { TFunction } from "i18next";
 import { ApprovalForm } from "../approvals/ApprovalForm";
 import { RevisionApprovalBadge } from "../approvals/RevisionApprovalBadge";
 import { useNavigate } from "react-router";
@@ -47,8 +49,17 @@ export function FileIcon({ extension }: { extension: string }) {
         : FileBox;
   return <Icon size={18} aria-hidden />;
 }
-function errorText(e: unknown) {
-  return e instanceof Error ? e.message : String(e);
+function errorText(e: unknown, t: TFunction) {
+  // Locally validated file errors are already translated; server diagnostics are not UI copy.
+  if (
+    !(e instanceof ApiError) &&
+    e instanceof Error &&
+    [t("unsupportedFile"), t("uploadLimit"), t("transferFailed")].includes(
+      e.message,
+    )
+  )
+    return e.message;
+  return userError(e, t);
 }
 export function sizeText(n: number) {
   return n < 1024
@@ -317,7 +328,7 @@ export function Documents({ projects }: { projects: Project[] }) {
       await refresh();
       setMessage(t("success"));
     } catch (e) {
-      setMessage(errorText(e));
+      setMessage(errorText(e, t));
     } finally {
       setBusy(false);
     }
@@ -411,7 +422,7 @@ export function Documents({ projects }: { projects: Project[] }) {
       transferUpdate(item.id, { state: "done", progress: 100 });
       return true;
     } catch (e) {
-      transferUpdate(item.id, { state: "failed", error: errorText(e) });
+      transferUpdate(item.id, { state: "failed", error: errorText(e, t) });
       return false;
     }
   }
@@ -507,7 +518,7 @@ export function Documents({ projects }: { projects: Project[] }) {
         <>
           {config.isError && (
             <p role="alert">
-              {t("error")}: {errorText(config.error)}
+              {t("error")}: {errorText(config.error, t)}
             </p>
           )}
           {config.data && !config.data.storageReady && (

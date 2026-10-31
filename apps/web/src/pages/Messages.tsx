@@ -1,3 +1,4 @@
+import { userError } from "../errors";
 import { useState, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { NavLink, useNavigate, useParams, useSearchParams } from "react-router";
@@ -123,7 +124,7 @@ function ProjectMessages({
       await api(`message-attachments/${key}`, undefined, "DELETE");
       await uploads.refetch();
     } catch (e) {
-      setError(e instanceof Error ? e.message : t("error"));
+      setError(userError(e, t));
     } finally {
       setBusy(false);
     }
@@ -165,7 +166,7 @@ function ProjectMessages({
       await client.invalidateQueries({ queryKey: ["conversations", project] });
       open(result.id);
     } catch (e) {
-      setError(e instanceof Error ? e.message : t("error"));
+      setError(userError(e, t));
     } finally {
       setBusy(false);
     }
@@ -455,7 +456,7 @@ function ConversationPane({
       setRenaming(false);
       refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : t("error"));
+      setError(userError(e, t));
     } finally {
       setBusy(false);
     }

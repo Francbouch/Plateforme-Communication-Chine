@@ -538,5 +538,13 @@
   "selectSupplier": "选择供应商",
   "selectDocument": "选择文档",
   "access_request_assignee": "请求负责人",
-  "access_assign_request": "分配请求"
+  "access_assign_request": "分配请求",
+  "sessionExpired": "您的会话已过期。草稿仍然显示；请在重新登录前复制草稿。",
+  "sessionReconnect": "重新登录",
+  "permissionChanged": "此资源不可用或您的权限已更改。",
+  "requestConflict": "数据已更改。请刷新后重试。",
+  "requestTooLarge": "文件或请求超过允许的大小。",
+  "requestRateLimited": "请求过多。请稍后重试。",
+  "offlineError": "连接已中断。请检查网络后重试。",
+  "requestFailed": "操作失败。您的更改尚未确认，请重试。"
 }

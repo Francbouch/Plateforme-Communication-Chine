@@ -1406,3 +1406,9 @@ label.button:focus-within {
 .access-text-form {
   margin: 1rem 0;
 }
+
+.session-notice {
+  padding: 1rem;
+  border-bottom: 2px solid var(--line);
+  background: var(--surface);
+}

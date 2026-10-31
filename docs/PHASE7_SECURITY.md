@@ -245,7 +245,8 @@ Un Cloudflare Build indépendant ne remplace pas cette procédure d’activation
    npx wrangler d1 export forgebridge-db --remote --output /secure/forgebridge-before-phase7.sql
    ```
 
-   Restaurer cet export dans un D1 local isolé avec `--local --persist-to`, comparer
+   Préparer une copie de restauration selon [la procédure phase 8](PHASE8_STABILIZATION.md),
+   puis la restaurer dans un D1 local isolé avec `--local --persist-to` et comparer
    les nombres et identifiants de projets, documents, révisions, points, messages et
    décisions, les clés R2 et les clés étrangères. Exécuter le contrôle/migration 0009
    sur cette copie. Vérifier le schéma, l’intégrité et un second passage inchangé.

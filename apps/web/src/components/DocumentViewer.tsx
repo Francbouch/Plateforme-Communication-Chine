@@ -53,7 +53,8 @@ function RevisionViewer({
     [zoom, setZoom] = useState(1),
     [fit, setFit] = useState("width"),
     [width, setWidth] = useState(800),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [attempt, setAttempt] = useState(0);
   const [space, setSpace] = useState<PageSpace | null>(null),
     [rotation, setRotation] = useState(0),
     [tool, setTool] = useState<DrawingTool>("select"),
@@ -123,15 +124,17 @@ function RevisionViewer({
             if (!disposed) setPdf(doc);
           })
           .catch(() => {
-            if (!disposed) setError(t("fileOpenError"));
+            if (!disposed) setError("fileOpenError");
           });
       })
-      .catch(() => setError(t("fileOpenError")));
+      .catch(() => {
+        if (!disposed) setError("fileOpenError");
+      });
     return () => {
       disposed = true;
       void task?.destroy();
     };
-  }, [url, revision.extension, t, previewSource]);
+  }, [url, revision.extension, previewSource, attempt]);
   useEffect(() => {
     if (!pdf || !canvas.current) return;
     let cancelled = false,
@@ -182,17 +185,17 @@ function RevisionViewer({
         });
         void render.promise.catch((e) => {
           if (!cancelled && e.name !== "RenderingCancelledException")
-            setError(t("fileOpenError"));
+            setError("fileOpenError");
         });
       })
       .catch(() => {
-        if (!cancelled) setError(t("fileOpenError"));
+        if (!cancelled) setError("fileOpenError");
       });
     return () => {
       cancelled = true;
       render?.cancel();
     };
-  }, [pdf, page, zoom, fit, width, t, rotation]);
+  }, [pdf, page, zoom, fit, width, rotation]);
   useEffect(() => {
     if (!session.selected || !pageContainer.current) return;
     const annotationId =
@@ -317,7 +320,16 @@ function RevisionViewer({
           {t("downloadOriginal")}
         </a>
       </div>
-      {error && <p role="alert">{error}</p>}
+      {error && (
+        <div role="alert">
+          <p>{t(error)}</p>
+          {revision.extension === "pdf" && (
+            <button onClick={() => setAttempt((n) => n + 1)}>
+              {t("retry")}
+            </button>
+          )}
+        </div>
+      )}
       {reviewEnabled && (!collaboration || collaboration.canAnnotate) && (
         <>
           <p className="eyebrow" data-testid="active-review-revision">
@@ -431,7 +443,7 @@ function RevisionViewer({
                 maxHeight: fit === "page" ? 650 : undefined,
                 transform: fit === "page" ? `scale(${zoom})` : undefined,
               }}
-              onError={() => setError(t("fileOpenError"))}
+              onError={() => setError("fileOpenError")}
             />
           ) : (
             <p>

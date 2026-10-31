@@ -18,7 +18,7 @@ async function login(context: BrowserContext, actor: string) {
   });
   expect(r.ok()).toBeTruthy();
 }
-async function fixture(page: Page) {
+async function fixture(page: Page, multiplePages = false) {
   await page.goto("/admin");
   const org = await post(page, "organizations", {
       name: "Security browser organization",
@@ -46,6 +46,7 @@ async function fixture(page: Page) {
   await post(page, `projects/${p.id}/suppliers`, { supplier_id: supplier.id });
   const pdf = await PDFDocument.create();
   pdf.addPage([300, 300]);
+  if (multiplePages) pdf.addPage([300, 300]);
   const bytes = Buffer.from(await pdf.save());
   async function upload(name: string, label: string, document_id?: string) {
     const u = await post(page, `projects/${p.id}/uploads`, {
@@ -116,6 +117,7 @@ async function fixture(page: Page) {
   });
   await page.goto("/admin");
   return {
+    upload,
     org: org.id as string,
     project: p.id as string,
     privateProject: privateProject.id as string,
@@ -589,5 +591,169 @@ test("only explicitly assigned supplier can confirm an immutable decision with t
   expect(JSON.parse(a.approval.decision_identity).subject).toBe(
     "supplier-approve",
   );
+  await context.close();
+});
+test("supplier browses past thirty exact revisions and published points, retries a failed PDF and keeps its page when changing language", async ({
+  page,
+  browser,
+}) => {
+  test.setTimeout(120000);
+  const f = await fixture(page, true);
+  for (let n = 0; n < 30; n++) {
+    const id = crypto.randomUUID();
+    await post(page, `revisions/${f.revision}/review-items`, {
+      id,
+      page: 1,
+      type: "discussion",
+      title: `Point history ${n}`,
+      summary: "Visible test",
+      geometry: { points: [] },
+    });
+    await post(
+      page,
+      `review-items/${id}`,
+      { version: 1, publication: "published" },
+      "PATCH",
+    );
+  }
+  const revisions = [f.revision];
+  for (let n = 0; n < 30; n++)
+    revisions.push(
+      (await f.upload("Shared browser drawing", `H-${n}`, f.document))
+        .revision_id,
+    );
+  await post(
+    page,
+    `access/documents/${f.document}/sharing`,
+    { shared: true, revision_ids: revisions },
+    "PATCH",
+  );
+  const i = await inviteApi(
+      page,
+      f,
+      "supplier-history@example.test",
+      "supplier_engineer",
+    ),
+    context = await browser.newContext({ baseURL: origin }),
+    p = await context.newPage();
+  await accept(p, "supplier-history", i.invitation_url);
+  let failed = false,
+    reads = 0;
+  p.on("request", (r) => {
+    if (
+      /\/collaboration\/revisions\/[^/]+\/content$/.test(
+        new URL(r.url()).pathname,
+      )
+    )
+      reads++;
+  });
+  await p.route(
+    "**/api/v1/collaboration/revisions/*/content",
+    async (route) => {
+      if (!failed) {
+        failed = true;
+        await route.fulfill({ status: 503, body: "unavailable" });
+      } else await route.continue();
+    },
+  );
+  await p.getByRole("button", { name: /Shared browser drawing/ }).click();
+  await expect(p.getByRole("alert")).toContainText("Impossible");
+  await p.getByRole("button", { name: "Réessayer", exact: true }).click();
+  await expect(p.locator(".pdf-sheet canvas")).toBeVisible();
+  await p
+    .getByRole("navigation", { name: "Historique des révisions", exact: true })
+    .getByRole("button", { name: "Suivant", exact: true })
+    .click();
+  await expect(
+    p.getByRole("combobox", { name: "Révision", exact: true }),
+  ).toHaveValue(f.revision);
+  await expect(p.getByRole("button", { name: /Point history 29/ })).toHaveCount(
+    0,
+  );
+  await p
+    .getByRole("navigation", {
+      name: "Points techniques et commentaires",
+      exact: true,
+    })
+    .getByRole("button", { name: "Suivant", exact: true })
+    .click();
+  await expect(
+    p.getByRole("button", { name: /Point history 29/ }),
+  ).toBeVisible();
+  const pageNumber = p.getByRole("spinbutton", { name: "Page", exact: true });
+  await expect(pageNumber).toHaveAttribute("max", "2");
+  await pageNumber.fill("2");
+  await expect(pageNumber).toHaveValue("2");
+  const before = reads;
+  await p
+    .getByRole("combobox", { name: "Langue", exact: true })
+    .selectOption("en");
+  await expect(
+    p.getByRole("heading", { name: "My collaboration workspace", exact: true }),
+  ).toBeVisible();
+  await expect(
+    p.getByRole("spinbutton", { name: "Page", exact: true }),
+  ).toHaveValue("2");
+  expect(reads).toBe(before);
+  expect(
+    (
+      await p.request.get(
+        `/api/v1/collaboration/revisions/${f.newRevision}/content`,
+      )
+    ).status(),
+  ).toBe(404);
+  await context.close();
+});
+test("expired supplier session preserves the unsent draft and offers explicit reconnection without duplicate writes", async ({
+  page,
+  browser,
+}) => {
+  const f = await fixture(page),
+    i = await inviteApi(
+      page,
+      f,
+      "supplier-expiry@example.test",
+      "supplier_engineer",
+    ),
+    context = await browser.newContext({ baseURL: origin }),
+    p = await context.newPage();
+  const actor = await accept(p, "supplier-expiry", i.invitation_url);
+  await p.getByRole("button", { name: "Messages", exact: true }).click();
+  await p
+    .getByRole("combobox", { name: "Conversations", exact: true })
+    .selectOption(f.shared);
+  const reply = p.getByRole("textbox", {
+    name: "Rédiger un message",
+    exact: true,
+  });
+  await reply.fill("Unsent draft after actual session revocation");
+  await post(
+    page,
+    `access/organizations/${f.org}/revoke-sessions/${actor}`,
+    {},
+  );
+  await p
+    .locator(".access-text-form")
+    .getByRole("button", { name: "Envoyer", exact: true })
+    .click();
+  await expect(p.locator(".session-notice")).toContainText(
+    "Votre session a expiré",
+  );
+  await expect(
+    p
+      .locator(".session-notice")
+      .getByRole("link", { name: "Se reconnecter", exact: true }),
+  ).toHaveAttribute("href", "/cdn-cgi/access/logout");
+  await expect(reply).toHaveValue(
+    "Unsent draft after actual session revocation",
+  );
+  const messages = await (
+    await page.request.get(`/api/v1/conversations/${f.shared}/messages`)
+  ).json();
+  expect(
+    messages.items.some((m: { body: string }) =>
+      m.body.includes("Unsent draft"),
+    ),
+  ).toBe(false);
   await context.close();
 });
