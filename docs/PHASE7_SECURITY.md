@@ -352,3 +352,19 @@ collaboratives paginent à 30 éléments. Il n’y a pas de SSO interentreprises
 de provisionnement SCIM, de DRM ou de certification de signature. Aucun incident
 critique connu ne doit être masqué par ces limites : l’activation reste conditionnée
 à la configuration réelle et aux vérifications ci-dessus.
+
+### Correction après retour CI
+
+Les annotations GitHub de la relance ont identifié un chevauchement mobile :
+l’en-tête fournisseur héritait d’une hauteur fixe malgré le retour à la ligne,
+et le titre recouvrait Déconnexion. L’en-tête prend désormais sa hauteur naturelle.
+Le parcours mobile vérifie l’absence de chevauchement et clique réellement sur
+Déconnexion, sans clic forcé. Les imports PDF attendent explicitement que le champ
+soit activé après le chargement de la configuration ; Playwright pouvait autrement
+sélectionner un fichier désactivé sans démarrer d’import. Aucun délai arbitraire,
+retrait de test ou contournement d’autorisation n’a été ajouté.
+
+Les rapporteurs Vitest et Playwright publient maintenant les échecs dans les
+annotations GitHub Actions, en plus des journaux et traces existants. Cela permet
+le diagnostic lorsque le stockage externe des journaux Actions n’est pas autorisé
+par la politique réseau de l’environnement.

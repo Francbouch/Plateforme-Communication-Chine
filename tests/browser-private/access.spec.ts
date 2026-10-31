@@ -316,6 +316,17 @@ test("administrator creates an invitation and shares only B; supplier accepts, s
       route,
     ).toBe(404);
   await supplierPage.setViewportSize({ width: 390, height: 844 });
+  await expect
+    .poll(async () => {
+      const header = await supplierPage
+        .locator(".collaborative-shell > header")
+        .boundingBox();
+      const main = await supplierPage
+        .locator(".collaborative-shell > main")
+        .boundingBox();
+      return !!header && !!main && header.y + header.height <= main.y;
+    })
+    .toBe(true);
   await supplierPage.screenshot({
     path: "/tmp/forgebridge-phase7-supplier.png",
     fullPage: true,

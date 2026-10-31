@@ -1380,6 +1380,8 @@ label.button:focus-within {
   min-height: 100vh;
 }
 .collaborative-shell > header {
+  height: auto;
+  min-height: 78px;
   display: flex;
   flex-wrap: wrap;
   gap: 1rem;
