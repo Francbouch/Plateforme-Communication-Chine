@@ -1,4 +1,4 @@
-import fr from "../../apps/web/src/locales/fr-CA.json";
+import fr from "../../apps/web/src/locales/fr-CA.json" with { type: "json" };
 import { test, expect, type Page } from "@playwright/test";
 import { PDFDocument } from "@cantoo/pdf-lib";
 import type { ApprovalDetail } from "../../packages/shared/src/approvals";
