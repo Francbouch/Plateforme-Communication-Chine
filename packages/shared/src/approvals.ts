@@ -43,6 +43,8 @@ export const approvalAction = z
     { message: "A justification is required" },
   );
 export interface Approval {
+  decision_identity?: string | null;
+  externally_shared?: number;
   id: string;
   number: number;
   project_id: string;

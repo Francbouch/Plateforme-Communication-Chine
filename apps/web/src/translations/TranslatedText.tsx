@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useContext, createContext } from "react";
 import { useTranslation } from "react-i18next";
 import { api, ApiError } from "../client";
 import { MessageBody } from "../components/MessageBody";
@@ -9,6 +9,10 @@ import {
   type TranslationSource,
   type TranslationResult,
 } from "../../../../packages/shared/src/translations";
+export const TranslationPermissions = createContext({
+  translate: true,
+  correct: true,
+});
 export function TranslatedText(props: {
   source: TranslationSource;
   text: string;
@@ -31,6 +35,7 @@ function TextControl({
   official?: boolean;
 }) {
   const { t, i18n } = useTranslation();
+  const permissions = useContext(TranslationPermissions);
   const [open, setOpen] = useState(false),
     [target, setTarget] = useState<TranslationLanguage>(() => {
       const saved = localStorage.getItem("forgebridge.translation.target");
@@ -132,7 +137,7 @@ function TextControl({
           )}
         </div>
       )}
-      {!isDemo && (
+      {!isDemo && permissions.translate && (
         <button
           className="translation-toggle"
           aria-expanded={open}
@@ -215,14 +220,16 @@ function TextControl({
               >
                 {t(copied ? "translation_copied" : "translation_copy")}
               </button>
-              <button
-                onClick={() => {
-                  setCorrection(data.corrected ?? data.machine);
-                  setEditing(true);
-                }}
-              >
-                {t("translation_edit")}
-              </button>
+              {permissions.correct && (
+                <button
+                  onClick={() => {
+                    setCorrection(data.corrected ?? data.machine);
+                    setEditing(true);
+                  }}
+                >
+                  {t("translation_edit")}
+                </button>
+              )}
               <details>
                 <summary>{t("translation_versions")}</summary>
                 <MessageBody body={data.original} />

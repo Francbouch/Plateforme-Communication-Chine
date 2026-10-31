@@ -1,3 +1,4 @@
+import { translationAccess } from "./access-control";
 import { Hono } from "hono";
 import { z } from "zod";
 import { Store } from "./database";
@@ -85,7 +86,9 @@ export async function sourceText(s: Store, ref: TranslationSource) {
       )
       .first();
   if (!row) throw new HttpError(404, "translation_source_unavailable");
-  const p = await s.requireProject(row.project_id, true);
+  const p = s.multiuser
+    ? await translationAccess(s, ref)
+    : await s.requireProject(row.project_id, true);
   if (
     (row.private_author && row.private_author !== s.userId) ||
     (row.status === "draft" && row.requester_id !== s.userId)
@@ -97,7 +100,34 @@ export async function sourceText(s: Store, ref: TranslationSource) {
     row.text.length > 8000
   )
     throw new HttpError(400, "translation_source_length");
-  return { text: row.text, organization_id: p.organization_id };
+  return {
+    text: row.text,
+    organization_id: p.organization_id,
+    external: "external" in p && p.external === true,
+  };
+}
+async function relevantGlossary(
+  s: Store,
+  src: { text: string; organization_id: string; external: boolean },
+) {
+  if (src.external) return [];
+  const glossary = await s.all<GlossaryEntry>(
+    `SELECT id,fr,en,zh_cn AS 'zh-CN',definition,domain,notes,version FROM translation_glossary WHERE organization_id=? AND project_id IS NULL AND deleted_at IS NULL AND (instr(?,fr_fold)>0 OR instr(?,en_fold)>0 OR instr(?,zh_cn_fold)>0) ORDER BY id LIMIT 31`,
+    src.organization_id,
+    src.text.toLowerCase(),
+    src.text.toLowerCase(),
+    src.text.toLowerCase(),
+  );
+  if (glossary.length > 30)
+    throw new HttpError(400, "translation_too_many_terms");
+  return glossary;
+}
+function glossaryFingerprint(glossary: GlossaryEntry[]) {
+  return hash(
+    JSON.stringify(
+      glossary.map((g) => [g.id, g.version, g.fr, g.en, g["zh-CN"]]),
+    ),
+  );
 }
 type Stored = {
   id: string;
@@ -108,6 +138,7 @@ type Stored = {
   source_id: string;
   source_field: TranslationSource["field"];
   source_hash: string;
+  glossary_hash: string;
   organization_id: string;
 } & Omit<TranslationResult, "warnings" | "cached">;
 async function result(
@@ -166,20 +197,8 @@ export function translationRoutes(
       src = await sourceText(s, v);
     if (v.source_language === v.target_language)
       throw new HttpError(400, "translation_same_language");
-    const glossary = await s.all<GlossaryEntry>(
-      `SELECT id,fr,en,zh_cn AS 'zh-CN',definition,domain,notes,version FROM translation_glossary WHERE organization_id=? AND project_id IS NULL AND deleted_at IS NULL AND (instr(?,fr_fold)>0 OR instr(?,en_fold)>0 OR instr(?,zh_cn_fold)>0) ORDER BY id LIMIT 31`,
-      src.organization_id,
-      src.text.toLowerCase(),
-      src.text.toLowerCase(),
-      src.text.toLowerCase(),
-    );
-    if (glossary.length > 30)
-      throw new HttpError(400, "translation_too_many_terms");
-    const glossaryHash = await hash(
-        JSON.stringify(
-          glossary.map((g) => [g.id, g.version, g.fr, g.en, g["zh-CN"]]),
-        ),
-      ),
+    const glossary = await relevantGlossary(s, src);
+    const glossaryHash = await glossaryFingerprint(glossary),
       sourceHash = await hash(src.text);
     const provider = providerFactory(c.env);
     const providerVersion = provider.version,
@@ -333,12 +352,22 @@ export function translationRoutes(
       .statement("SELECT * FROM translations WHERE id=?", id)
       .first<Stored>();
     if (!t) throw new HttpError(404, "translation_source_unavailable");
+    if (s.multiuser)
+      await translationAccess(
+        s,
+        { kind: t.source_kind, id: t.source_id, field: t.source_field },
+        true,
+      );
     const src = await sourceText(s, {
       kind: t.source_kind,
       id: t.source_id,
       field: t.source_field,
     });
-    if ((await hash(src.text)) !== t.source_hash)
+    if (
+      (await hash(src.text)) !== t.source_hash ||
+      (await glossaryFingerprint(await relevantGlossary(s, src))) !==
+        t.glossary_hash
+    )
       throw new HttpError(409, "translation_source_changed");
     const warnings = verifyTechnical(t.original, v.body).length
       ? ["technical_values_changed"]
@@ -367,7 +396,7 @@ export function translationRoutes(
   app.get("/organizations/:org/glossary", async (c) => {
     const s = c.get("store"),
       org = parse(z.uuid(), c.req.param("org"));
-    await s.requireOrg(org);
+    await s.requireOrg(org, s.multiuser || s.accessSchema);
     const q = (c.req.query("q") ?? "").slice(0, 160),
       domain = (c.req.query("domain") ?? "").slice(0, 100),
       page = parse(

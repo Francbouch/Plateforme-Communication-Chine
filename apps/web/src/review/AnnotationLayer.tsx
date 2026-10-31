@@ -26,6 +26,7 @@ export function AnnotationLayer({
   color,
   session,
   onDrawn,
+  canEdit,
 }: {
   space: PageSpace;
   page: number;
@@ -33,6 +34,7 @@ export function AnnotationLayer({
   color: ReviewItem["color"];
   session: ReviewSession;
   onDrawn: () => void;
+  canEdit?: (item: ReviewItem) => boolean;
 }) {
   const { t } = useTranslation(),
     [draft, setDraft] = useState<Draft | null>(null),
@@ -86,6 +88,7 @@ export function AnnotationLayer({
         return;
       }
       session.selectAnnotation(selected, e.ctrlKey || e.metaKey);
+      if (canEdit && !canEdit(selected)) return;
       if (e.ctrlKey || e.metaKey) return;
       session.setPanel(true);
       const base = {

@@ -60,6 +60,8 @@ jobs:
       - name: Inspect, reconcile manual migrations and apply pending migrations
         run: python3 scripts/d1/migrate.py --remote --apply
         env:
+          PHASE7_SECURITY_REVIEWED: ${{ vars.PHASE7_SECURITY_REVIEWED }}
+          PHASE7_BACKUP_PROOF: ${{ vars.PHASE7_BACKUP_PROOF }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || '5b91da32c6ac0121968ee821e875ce7d' }}
       # Same checkout and job: no deploy can run after a failed migration/post-check.

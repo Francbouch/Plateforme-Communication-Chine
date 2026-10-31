@@ -18,6 +18,7 @@ export default defineConfig({
   outputDir: "test-results/preview",
   reporter: [
     ["list"],
+    ...(process.env.GITHUB_ACTIONS ? [["github"] as ["github"]] : []),
     ["json", { outputFile: "test-results/preview-results.json" }],
   ],
 });

@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { Store, projectScope } from "./database";
+import { Store } from "./database";
 import { HttpError, type Bindings, type Principal } from "./types";
 import { fileTypes } from "../../../packages/shared/src/documents";
 import {
@@ -26,7 +26,7 @@ function page(input: string | undefined) {
   return parse(z.coerce.number().int().min(0).max(10000), input ?? 0);
 }
 function guard(s: Store, project: string) {
-  const g = projectScope("p", s.userId, true);
+  const g = s.scopeProject("p", true);
   return {
     text: `EXISTS(SELECT 1 FROM projects p WHERE p.id=? AND ${g.text})`,
     args: [project, ...g.args],

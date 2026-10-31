@@ -14,6 +14,9 @@ import {
 } from "../../../../packages/shared/src/review";
 interface DocumentViewerProps {
   revision: Revision;
+  contentUrl?: string;
+  readOnly?: boolean;
+  collaboration?: { pointId?: string; canAnnotate: boolean; actorId?: string };
   previewSource?: { bytes: Uint8Array; url: string };
   onReviewNavigate?: (target: ReviewTarget) => void;
   target?: ReviewTarget | null;
@@ -30,12 +33,18 @@ export function DocumentViewer(props: DocumentViewerProps) {
 }
 function RevisionViewer({
   revision,
+  contentUrl,
+  readOnly,
+  collaboration,
   previewSource,
   onReviewNavigate,
   target,
 }: DocumentViewerProps) {
   const { t } = useTranslation();
-  const url = previewSource?.url ?? `/api/v1/revisions/${revision.id}/content`;
+  const url =
+    previewSource?.url ??
+    contentUrl ??
+    `/api/v1/revisions/${revision.id}/content`;
   const pageContainer = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null),
     container = useRef<HTMLDivElement>(null);
@@ -50,8 +59,11 @@ function RevisionViewer({
     [tool, setTool] = useState<DrawingTool>("select"),
     [color, setColor] = useState<ReviewItem["color"]>("red"),
     [full, setFull] = useState(false);
-  const reviewEnabled = revision.extension === "pdf" && !previewSource;
-  const session = useReview(revision, page, reviewEnabled);
+  const reviewEnabled =
+    revision.extension === "pdf" &&
+    !previewSource &&
+    (!readOnly || !!collaboration);
+  const session = useReview(revision, page, reviewEnabled, collaboration);
   useEffect(() => {
     setSpace(null);
     setRotation(0);
@@ -290,9 +302,11 @@ function RevisionViewer({
             >
               {t(full ? "exitFullscreen" : "fullscreen")}
             </button>
-            <button onClick={() => session.setPanel(!session.panel)}>
-              {t(session.panel ? "hideComments" : "showComments")}
-            </button>
+            {!collaboration && (
+              <button onClick={() => session.setPanel(!session.panel)}>
+                {t(session.panel ? "hideComments" : "showComments")}
+              </button>
+            )}
           </>
         )}
         <a
@@ -304,7 +318,7 @@ function RevisionViewer({
         </a>
       </div>
       {error && <p role="alert">{error}</p>}
-      {reviewEnabled && (
+      {reviewEnabled && (!collaboration || collaboration.canAnnotate) && (
         <>
           <p className="eyebrow" data-testid="active-review-revision">
             {t("annotatingRevision", { revision: revision.label })}
@@ -372,7 +386,7 @@ function RevisionViewer({
       )}
       <div
         className={
-          reviewEnabled && session.panel
+          reviewEnabled && session.panel && !collaboration
             ? "review-layout"
             : "review-layout expanded"
         }
@@ -392,7 +406,16 @@ function RevisionViewer({
                     page={page}
                     tool={tool}
                     color={color}
-                    session={session}
+                    session={
+                      collaboration && !collaboration.canAnnotate
+                        ? { ...session, saving: true }
+                        : session
+                    }
+                    canEdit={
+                      collaboration
+                        ? (item) => item.created_by === collaboration.actorId
+                        : undefined
+                    }
                     onDrawn={() => setTool("select")}
                   />
                 )}
@@ -416,7 +439,7 @@ function RevisionViewer({
             </p>
           )}
         </div>
-        {reviewEnabled && session.panel && (
+        {reviewEnabled && session.panel && !collaboration && (
           <ReviewPanel
             session={session}
             revision={revision}

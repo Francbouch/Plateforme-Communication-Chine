@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { Store, projectScope } from "./database";
+import { Store } from "./database";
 import { HttpError, type Bindings, type Principal } from "./types";
 import {
   reviewCreate,
@@ -63,7 +63,7 @@ async function item(s: Store, itemId: string, write = false) {
   return { item: hydrate(row), scope: r };
 }
 function guard(s: Store, project: string) {
-  const g = projectScope("p", s.userId, true);
+  const g = s.scopeProject("p", true);
   return {
     text: `EXISTS(SELECT 1 FROM projects p WHERE p.id=? AND ${g.text})`,
     args: [project, ...g.args],
@@ -113,7 +113,21 @@ export function reviewRoutes() {
   app.post("/api/v1/revisions/:revision/annotations", async (c) => {
     const s = c.get("store"),
       r = await revision(s, id(c.req.param("revision")), true),
-      v = parse(reviewCreate, await c.req.json().catch(() => null));
+      v = parse(
+        reviewCreate.extend({ point_id: z.uuid().nullable().optional() }),
+        await c.req.json().catch(() => null),
+      );
+    if (
+      v.point_id &&
+      !(await s
+        .statement(
+          "SELECT 1 FROM review_items WHERE id=? AND revision_id=? AND is_point=1 AND point_deleted_at IS NULL",
+          v.point_id,
+          r.id,
+        )
+        .first())
+    )
+      throw new HttpError(404, "Point unavailable");
     if (v.type === "discussion")
       throw new HttpError(400, "A drawing is required");
     const existing = await s
@@ -129,7 +143,7 @@ export function reviewRoutes() {
       await s.write(
         [
           s.statement(
-            `INSERT INTO graphical_annotations(id,document_id,revision_id,page,type,color,geometry,content,created_by) SELECT ?,?,?,?,?,?,?,?,? WHERE ${g.text}`,
+            `INSERT INTO graphical_annotations(id,document_id,revision_id,page,type,color,geometry,content,created_by,point_id) SELECT ?,?,?,?,?,?,?,?,?,? WHERE ${g.text}`,
             v.id,
             r.document_id,
             r.id,
@@ -139,6 +153,7 @@ export function reviewRoutes() {
             JSON.stringify(v.geometry),
             v.content,
             s.userId,
+            v.point_id ?? null,
             ...g.args,
           ),
         ],

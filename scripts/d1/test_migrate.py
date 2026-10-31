@@ -1,6 +1,7 @@
 import sqlite3
 import unittest
-from migrate import MIGRATIONS, ROOT, SCHEMA, plan
+from migrate import MIGRATIONS, ROOT, SCHEMA, plan, migrate
+from unittest.mock import patch
 
 
 class MigrationTests(unittest.TestCase):
@@ -87,6 +88,47 @@ class MigrationTests(unittest.TestCase):
         self.db.execute('CREATE TABLE unexpected(id TEXT)')
         with self.assertRaises(ValueError):
             self.inspect()
+
+
+class SecurityGateTests(unittest.TestCase):
+    class Remote:
+        target = '--remote'
+        writes = []
+        def inspect(self):
+            return [], ['0009_secure_collaboration.sql']
+        def query(self, sql):
+            self.writes.append(sql)
+        def run(self, *args):
+            self.writes.append(args)
+
+    def test_phase_seven_refuses_remote_writes_without_review_and_backup(self):
+        runner = self.Remote()
+        with patch.dict('os.environ', {}, clear=True):
+            with self.assertRaisesRegex(ValueError, 'No writes performed'):
+                migrate(runner, apply=True)
+        self.assertEqual(runner.writes, [])
+
+    def test_phase_seven_read_only_inspection_needs_no_approval(self):
+        runner = self.Remote()
+        with patch.dict('os.environ', {}, clear=True):
+            migrate(runner, apply=False)
+        self.assertEqual(runner.writes, [])
+
+    def test_reviewed_remote_gate_allows_existing_runner_and_verifies_afterwards(self):
+        class Reviewed(self.Remote):
+            persist_args = []
+            writes = []
+            done = False
+            def inspect(self):
+                return ([], []) if self.done else ([], ['0009_secure_collaboration.sql'])
+            def run(self, *args):
+                self.writes.append(args)
+                self.done = True
+                return 'Test-only simulated migration runner'
+        runner = Reviewed()
+        with patch.dict('os.environ', {'PHASE7_SECURITY_REVIEWED': 'true', 'PHASE7_BACKUP_PROOF': 'a' * 64}, clear=True):
+            migrate(runner, apply=True)
+        self.assertTrue(runner.done)
 
 
 if __name__ == '__main__':

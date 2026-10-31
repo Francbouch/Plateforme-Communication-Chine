@@ -23,7 +23,12 @@ export interface ReviewDetail {
   hasMoreMessages: boolean;
   hasMoreHistory: boolean;
 }
-export function useReview(revision: Revision, page: number, enabled: boolean) {
+export function useReview(
+  revision: Revision,
+  page: number,
+  enabled: boolean,
+  collaboration?: { pointId?: string; canAnnotate: boolean },
+) {
   const [selectedAnnotations, setSelectedAnnotations] = useState<string[]>([]);
   const [saved, setSaved] = useState(false);
   const activeRevision = useRef(revision.id);
@@ -39,11 +44,11 @@ export function useReview(revision: Revision, page: number, enabled: boolean) {
     setSaved(false);
   }, [revision.id]);
   const annotations = useInfiniteQuery({
-    queryKey: ["review", "annotations", revision.id, page],
+    queryKey: ["review", "annotations", revision.id, page, !!collaboration],
     initialPageParam: 0,
     queryFn: ({ pageParam }) =>
       api<Page<ReviewItem>>(
-        `revisions/${revision.id}/annotations?page_number=${page}&page=${pageParam}`,
+        `${collaboration ? "collaboration/" : ""}revisions/${revision.id}/annotations?page_number=${page}&page=${pageParam}`,
       ),
     getNextPageParam: (last) => (last.hasMore ? last.page + 1 : undefined),
     enabled,
@@ -87,7 +92,12 @@ export function useReview(revision: Revision, page: number, enabled: boolean) {
       () =>
         api<ReviewItem>(
           `revisions/${revisionId}/${data.type === "discussion" ? "review-items" : "annotations"}`,
-          data,
+          {
+            ...data,
+            ...(collaboration?.pointId
+              ? { point_id: collaboration.pointId }
+              : {}),
+          },
         ),
       (item) => item,
     );

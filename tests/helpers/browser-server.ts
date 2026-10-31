@@ -34,6 +34,7 @@ const env: Bindings = {
   ADMIN_EMAIL: "browser@example.test",
   ADMIN_USER_ID: crypto.randomUUID(),
   ADMIN_NAME: "Browser test administrator",
+  MULTIUSER_ENABLED: "true",
   TRANSLATION_ENABLED: "true",
   DEEPL_API_KEY: "test-fixture-only:fx",
   TRANSLATION_PER_MINUTE: "30",
@@ -104,15 +105,61 @@ const app = createApp(
   ),
   upstream,
 );
+// TEST ONLY Access edge session broker. Preset identities, loopback, ephemeral signing key.
+const sessions = new Map<string, string>();
 const server = createServer(async (req, res) => {
   try {
     const chunks: Buffer[] = [];
     for await (const chunk of req) chunks.push(Buffer.from(chunk));
+    if (req.url === "/__test__/auth" && req.method === "POST") {
+      const v = JSON.parse(Buffer.concat(chunks).toString()) as {
+        actor: string;
+      };
+      const id = crypto.randomUUID(),
+        actor = v.actor;
+      if (actor === "anonymous") sessions.set(id, "");
+      else {
+        const email =
+          actor === "admin" ? "browser@example.test" : `${actor}@example.test`;
+        const subject = actor === "admin" ? "isolated-browser-subject" : actor;
+        const signed = await new SignJWT({ email, type: "app" })
+          .setProtectedHeader({ alg: "RS256", kid: "browser-test" })
+          .setIssuer(issuer)
+          .setAudience("browser-test")
+          .setSubject(subject)
+          .setIssuedAt()
+          .setJti(crypto.randomUUID())
+          .setExpirationTime("10m")
+          .sign(keys.privateKey);
+        sessions.set(id, signed);
+      }
+      res.writeHead(200, {
+        "Set-Cookie": `fb-test-auth=${id}; HttpOnly; SameSite=Strict; Path=/`,
+        "Content-Type": "application/json",
+      });
+      res.end("{}");
+      return;
+    }
+    if (req.url === "/cdn-cgi/access/logout") {
+      const id = crypto.randomUUID();
+      sessions.set(id, "");
+      res.writeHead(200, {
+        "Set-Cookie": `fb-test-auth=${id}; HttpOnly; SameSite=Strict; Path=/`,
+        "Content-Type": "text/html",
+      });
+      res.end("<h1>Signed out (isolated Access fixture)</h1>");
+      return;
+    }
     const headers = new Headers();
     for (const [k, v] of Object.entries(req.headers))
       if (v) headers.set(k, Array.isArray(v) ? v.join(",") : v);
     // Deliberately simulates the Access edge for tests, after independently tested JWT verification.
-    headers.set("Cf-Access-Jwt-Assertion", token);
+    const sessionId = (headers.get("cookie") ?? "").match(
+      /(?:^|;\s*)fb-test-auth=([^;]+)/,
+    )?.[1];
+    const assertion = sessionId ? sessions.get(sessionId) : token;
+    headers.delete("Cf-Access-Jwt-Assertion");
+    if (assertion) headers.set("Cf-Access-Jwt-Assertion", assertion);
     for (const name of [
       "host",
       "connection",

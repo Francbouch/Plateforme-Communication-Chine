@@ -1,3 +1,8 @@
+import {
+  CollaborativeWorkspace,
+  AcceptInvitation,
+  logout,
+} from "./access/CollaborativeWorkspace";
 import React, { useEffect, useState, lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, NavLink, Routes, Route } from "react-router";
@@ -43,6 +48,17 @@ import "./i18n";
 import "./style.css";
 function App() {
   const { t, i18n } = useTranslation();
+  const [invitationToken] = useState(() => {
+    const p = new URLSearchParams(window.location.hash.slice(1));
+    const token = p.get("invitation") ?? "";
+    if (token)
+      history.replaceState(
+        null,
+        "",
+        window.location.pathname + window.location.search,
+      );
+    return token;
+  });
   const [dark, setDark] = useState(
     localStorage.getItem("forgebridge.theme") === "dark",
   );
@@ -97,8 +113,12 @@ function App() {
   const projects = useQuery({
     queryKey: ["projects", org],
     queryFn: () => api<Project[]>(`projects?organization_id=${org}`),
-    enabled: !!org,
+    enabled: !!org && account.data?.is_primary_admin !== false,
   });
+  if (invitationToken && !isDemo)
+    return <AcceptInvitation token={invitationToken} />;
+  if (account.data?.is_primary_admin === false && !isDemo)
+    return <CollaborativeWorkspace actor={account.data.profile} />;
   const nav = [
     ["dashboard", LayoutDashboard, "/"],
     ["projects", FolderKanban, "/projects"],
@@ -182,6 +202,15 @@ function App() {
                 Aperçu de démonstration · Données fictives · Aucune connexion
                 requise · Modifications limitées à cet onglet.
               </p>
+            )}
+            {!isDemo && account.data && (
+              <button
+                onClick={() => {
+                  void logout().catch(() => setLanguageError(true));
+                }}
+              >
+                {t("logout")}
+              </button>
             )}
             {languageError && <p role="alert">{t("error")}</p>}
             {account.isError ? (

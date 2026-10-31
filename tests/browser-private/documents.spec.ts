@@ -83,6 +83,9 @@ test("private library persists folders, R2 PDF originals and revisions through r
     page.getByRole("navigation", { name: "Chemin du dossier" }),
   ).toContainText("Plans techniques");
   const pdf = samplePdf("Non confidential test - revision A");
+  await expect(
+    page.getByLabel("Importer des documents", { exact: true }),
+  ).toBeEnabled();
   await page
     .getByLabel("Importer des documents", { exact: true })
     .setInputFiles({
@@ -177,6 +180,9 @@ test("private library persists folders, R2 PDF originals and revisions through r
   await detail
     .getByRole("button", { name: "Retour à la bibliothèque" })
     .click();
+  await expect(
+    page.getByLabel("Importer des documents", { exact: true }),
+  ).toBeEnabled();
   await page
     .getByLabel("Importer des documents", { exact: true })
     .setInputFiles([
@@ -232,6 +238,9 @@ test("private library persists folders, R2 PDF originals and revisions through r
       await route.abort();
     } else await route.continue();
   });
+  await expect(
+    page.getByLabel("Importer des documents", { exact: true }),
+  ).toBeEnabled();
   await page
     .getByLabel("Importer des documents", { exact: true })
     .setInputFiles({

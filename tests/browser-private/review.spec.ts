@@ -71,6 +71,9 @@ async function setup(page: Page, bytes: Buffer, suffix: string) {
       r.url().endsWith("/complete") &&
       r.request().method() === "POST",
   );
+  await expect(
+    page.getByLabel("Importer des documents", { exact: true }),
+  ).toBeEnabled();
   await page
     .getByLabel("Importer des documents", { exact: true })
     .setInputFiles({

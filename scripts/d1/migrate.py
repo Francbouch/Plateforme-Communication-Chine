@@ -2,6 +2,7 @@
 """Fail-closed D1 reconciliation. Run from the repository root; no R2 operations."""
 import argparse
 import json
+import os
 from pathlib import Path
 import re
 import sqlite3
@@ -108,6 +109,9 @@ def migrate(runner, apply=False):
     print(json.dumps({'recognize_manual': adopt, 'apply': pending}))
     if not apply:
         return
+    if runner.target == '--remote' and '0009_secure_collaboration.sql' in pending:
+        if os.environ.get('PHASE7_SECURITY_REVIEWED') != 'true' or not re.fullmatch(r'[a-f0-9]{64}', os.environ.get('PHASE7_BACKUP_PROOF', '')):
+            raise ValueError('Phase 7 requires verified administrator identity, authorization tests and a tested backup before remote migration. Set PHASE7_SECURITY_REVIEWED=true and PHASE7_BACKUP_PROOF to the reviewed backup SHA-256 only after completing docs/PHASE7_SECURITY.md. No writes performed.')
     # Only bookkeeping for fully matched, schema-only migrations. Safe to retry.
     runner.query(LEDGER)
     for name in adopt:

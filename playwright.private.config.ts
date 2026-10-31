@@ -19,6 +19,7 @@ export default defineConfig({
   outputDir: "test-results/private",
   reporter: [
     ["list"],
+    ...(process.env.GITHUB_ACTIONS ? [["github"] as ["github"]] : []),
     ["json", { outputFile: "test-results/private-results.json" }],
   ],
 });

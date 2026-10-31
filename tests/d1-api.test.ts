@@ -407,7 +407,7 @@ describe("real D1 and signed Access boundary", () => {
           "PATCH",
         )
       ).status,
-    ).toBe(403);
+    ).toBe(409);
     env.RATE_LIMITER = { limit: async () => ({ success: false }) };
     expect((await request("me")).status).toBe(429);
   });
@@ -499,7 +499,7 @@ describe("real D1 and signed Access boundary", () => {
         .bind(org, supplier, user),
       fixture.db
         .prepare(
-          "INSERT INTO project_memberships VALUES(?,?,?,'supplier_engineer',?,1)",
+          "INSERT INTO project_memberships(organization_id,project_id,user_id,role,supplier_id,active) VALUES(?,?,?,'supplier_engineer',?,1)",
         )
         .bind(org, p1, user, supplier),
     ]);

@@ -102,3 +102,13 @@ Aucune exécution distante ni publication n'est déclarée par ces tests locaux.
 La phase 5 ajoute 0007 sans changer le contrôle : [rapport des approbations](PHASE5_APPROVALS.md).
 
 Phase 6 : `0008_integrated_translations.sql` ajoute uniquement les tables de traduction et de glossaire ; conserver le même ordre migration puis déploiement. Voir [PHASE6_TRANSLATIONS.md](PHASE6_TRANSLATIONS.md).
+
+## Migration 0009 et contrôle de revue
+
+La migration additive de phase 7 ne partage aucun contenu existant et laisse les
+appartenances historiques désactivées pour le nouveau parcours. Sa première
+application distante est bloquée tant que la revue de sécurité et la preuve de
+sauvegarde restaurée ne sont pas renseignées (`PHASE7_SECURITY_REVIEWED`,
+`PHASE7_BACKUP_PROOF`). L’inspection seule et les essais locaux restent possibles.
+Ne pas contourner ce refus en inscrivant manuellement la migration dans le ledger.
+Voir [PHASE7_SECURITY.md](PHASE7_SECURITY.md) avant l’activation.
