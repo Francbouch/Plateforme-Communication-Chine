@@ -1,9 +1,10 @@
+import { userError } from "../errors";
 import { useState, useEffect, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { NavLink } from "react-router";
 import { isDemo } from "../demo";
 import { Plus } from "lucide-react";
-import { api, ApiError } from "../client";
+import { api } from "../client";
 import type { Project } from "../types";
 import { Collaborators } from "./Collaborators";
 import { useTranslation } from "react-i18next";
@@ -67,11 +68,7 @@ export function Projects({
       setEditing(undefined);
       setMessage(t("success"));
     } catch (e) {
-      setMessage(
-        e instanceof ApiError
-          ? `${t("error")} (${e.status}): ${e.message}`
-          : t("error"),
-      );
+      setMessage(userError(e, t));
     } finally {
       setBusy(false);
     }
@@ -251,11 +248,7 @@ export function Projects({
                                 queryKey: ["project-search"],
                               });
                             })
-                            .catch((e) =>
-                              setMessage(
-                                e instanceof Error ? e.message : t("error"),
-                              ),
-                            );
+                            .catch((e) => setMessage(userError(e, t)));
                       }}
                     >
                       {t("archive")}

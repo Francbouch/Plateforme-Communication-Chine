@@ -1,21 +1,21 @@
 import { ProjectMembers } from "./ProjectMembers";
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { api } from "../client";
 import { qc } from "../query";
-import { DocumentViewer } from "../components/DocumentViewer";
+const DocumentViewer = lazy(() =>
+  import("../components/DocumentViewer").then((m) => ({
+    default: m.DocumentViewer,
+  })),
+);
 import {
   TranslatedText,
   TranslationPermissions,
 } from "../translations/TranslatedText";
 import type { Revision } from "../../../../packages/shared/src/documents";
 import type { ProjectAccess } from "../../../../packages/shared/src/access";
-export async function logout() {
-  await api("access/logout", {});
-  qc.clear();
-  window.location.assign("/cdn-cgi/access/logout");
-}
+import { logout } from "./session";
 export function AcceptInvitation({ token }: { token: string }) {
   const { t } = useTranslation(),
     [error, setError] = useState(""),
@@ -207,6 +207,8 @@ function Documents({
   const { t } = useTranslation(),
     [q, setQ] = useState(""),
     [page, setPage] = useState(0),
+    [revisionPage, setRevisionPage] = useState(0),
+    [pointPage, setPointPage] = useState(0),
     [document, setDocument] = useState(""),
     [revision, setRevision] = useState(""),
     [point, setPoint] = useState("");
@@ -226,18 +228,20 @@ function Documents({
         ),
     }),
     detail = useQuery({
-      queryKey: ["collaboration", "document", document],
+      queryKey: ["collaboration", "document", document, revisionPage],
       queryFn: () =>
-        api<{ document: { name: string }; revisions: Revision[] }>(
-          `collaboration/documents/${document}`,
-        ),
+        api<{
+          document: { name: string };
+          revisions: Revision[];
+          hasMore: boolean;
+        }>(`collaboration/documents/${document}?page=${revisionPage}`),
       enabled: !!document,
     });
   const current =
     detail.data?.revisions.find((r) => r.id === revision) ??
     detail.data?.revisions[0];
   const points = useQuery({
-    queryKey: ["collaboration", "points", current?.id],
+    queryKey: ["collaboration", "points", current?.id, pointPage],
     queryFn: () =>
       api<{
         items: {
@@ -247,7 +251,8 @@ function Documents({
           status: string;
           page: number;
         }[];
-      }>(`collaboration/revisions/${current!.id}/points`),
+        hasMore: boolean;
+      }>(`collaboration/revisions/${current!.id}/points?page=${pointPage}`),
     enabled: !!current,
   });
   return (
@@ -271,6 +276,8 @@ function Documents({
             <button
               onClick={() => {
                 setDocument(d.id);
+                setRevisionPage(0);
+                setPointPage(0);
                 setRevision(d.revision_id);
                 setPoint("");
               }}
@@ -293,6 +300,7 @@ function Documents({
               value={current.id}
               onChange={(e) => {
                 setRevision(e.target.value);
+                setPointPage(0);
                 setPoint("");
               }}
             >
@@ -303,17 +311,32 @@ function Documents({
               ))}
             </select>
           </label>
-          {p.permissions.download_documents && (
-            <DocumentViewer
-              revision={current}
-              readOnly
-              contentUrl={`/api/v1/collaboration/revisions/${current.id}/content`}
-              collaboration={{
-                pointId: point || undefined,
-                canAnnotate: p.permissions.annotate && (!p.external || !!point),
-                actorId: actor,
+          <nav aria-label={t("revisionHistory")}>
+            <Pager
+              page={revisionPage}
+              setPage={(n) => {
+                setRevisionPage(n);
+                setRevision("");
+                setPointPage(0);
+                setPoint("");
               }}
+              more={detail.data?.hasMore}
             />
+          </nav>
+          {p.permissions.download_documents && (
+            <Suspense fallback={<p role="status">{t("loading")}</p>}>
+              <DocumentViewer
+                revision={current}
+                readOnly
+                contentUrl={`/api/v1/collaboration/revisions/${current.id}/content`}
+                collaboration={{
+                  pointId: point || undefined,
+                  canAnnotate:
+                    p.permissions.annotate && (!p.external || !!point),
+                  actorId: actor,
+                }}
+              />
+            </Suspense>
           )}
           {p.permissions.add_revisions && (
             <Upload project={p.id} document={current.document_id} />
@@ -333,6 +356,17 @@ function Documents({
               )}
             </article>
           ))}
+          {points.isError && <p role="alert">{t("access_unavailable")}</p>}
+          <nav aria-label={t("technicalPoints")}>
+            <Pager
+              page={pointPage}
+              setPage={(n) => {
+                setPointPage(n);
+                setPoint("");
+              }}
+              more={points.data?.hasMore}
+            />
+          </nav>
           {p.permissions.annotate && p.external && (
             <p>{t("access_annotation_point")}</p>
           )}

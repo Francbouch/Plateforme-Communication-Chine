@@ -1,3 +1,4 @@
+import { userError } from "../errors";
 import { TranslatedText } from "../translations/TranslatedText";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -73,7 +74,7 @@ export function ApprovalDetail({
         onClose();
       } else refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : t("error"));
+      setError(userError(e, t));
     } finally {
       setBusy(false);
     }

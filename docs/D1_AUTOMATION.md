@@ -112,3 +112,12 @@ sauvegarde restaurée ne sont pas renseignées (`PHASE7_SECURITY_REVIEWED`,
 `PHASE7_BACKUP_PROOF`). L’inspection seule et les essais locaux restent possibles.
 Ne pas contourner ce refus en inscrivant manuellement la migration dans le ledger.
 Voir [PHASE7_SECURITY.md](PHASE7_SECURITY.md) avant l’activation.
+
+## Restauration vérifiée — phase 8
+
+Le test natif inclut désormais un export et une restauration dans une seconde D1
+locale. Un export complet peut placer un index unique après les données qui le
+référencent : préparer une copie avec `scripts/d1/prepare_restore.py`, sans modifier
+le brut ni désactiver les contraintes. Voir la [procédure et les limites](PHASE8_STABILIZATION.md).
+Une sauvegarde D1 ne sauvegarde pas les octets R2. Aucun exercice ne doit restaurer
+la production pour faire un test.

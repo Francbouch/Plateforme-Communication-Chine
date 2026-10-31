@@ -1,3 +1,4 @@
+import { userError } from "../errors";
 import { useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "../client";
@@ -47,7 +48,7 @@ export function RequestForm({
       );
       onDone();
     } catch (e) {
-      setError(e instanceof Error ? e.message : t("error"));
+      setError(userError(e, t));
     } finally {
       setBusy(false);
     }

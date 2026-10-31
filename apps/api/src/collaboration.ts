@@ -1,3 +1,4 @@
+import { privateFileResponse } from "./private-file";
 import { Hono, type Context } from "hono";
 import { Store } from "./database";
 import { HttpError, type Bindings, type Principal } from "./types";
@@ -81,22 +82,12 @@ export function collaborationRoutes() {
     );
     const revision = r.revision as typeof r.revision & {
       object_key: string;
+      size: number;
       filename: string;
       content_type: string;
       extension: string;
     };
-    if (!c.env.DOCUMENTS) throw new HttpError(503, "R2 unavailable");
-    const object = await c.env.DOCUMENTS.get(revision.object_key);
-    if (!object) throw unavailable();
-    return new Response(object.body, {
-      headers: {
-        "Content-Type": revision.content_type,
-        "Content-Disposition": `${c.req.query("download") === "1" || !["pdf", "png", "jpg", "jpeg", "webp"].includes(revision.extension) ? "attachment" : "inline"}; filename*=UTF-8''${encodeURIComponent(revision.filename)}`,
-        "Cache-Control": "private, no-store",
-        "Content-Security-Policy": "default-src 'none'; sandbox",
-        "X-Content-Type-Options": "nosniff",
-      },
-    });
+    return privateFileResponse(c.req.raw, c.env.DOCUMENTS, revision);
   });
   app.get("/revisions/:id/points", async (c) => {
     const s = c.get("store"),
@@ -206,7 +197,7 @@ export function collaborationRoutes() {
     const s = c.get("store"),
       file = await s
         .statement(
-          "SELECT id,message_id,object_key,filename,content_type FROM message_attachments WHERE id=? AND state='attached'",
+          "SELECT id,message_id,object_key,filename,content_type,size,extension FROM message_attachments WHERE id=? AND state='attached'",
           c.req.param("id"),
         )
         .first<{
@@ -214,21 +205,13 @@ export function collaborationRoutes() {
           object_key: string;
           filename: string;
           content_type: string;
+          size: number;
+          extension: string;
         }>();
     if (!file) throw unavailable();
     const r = await messageAccess(s, file.message_id);
     await membership(s, r.access.id, "download_documents");
-    if (!c.env.DOCUMENTS) throw new HttpError(503, "R2 unavailable");
-    const o = await c.env.DOCUMENTS.get(file.object_key);
-    if (!o) throw unavailable();
-    return new Response(o.body, {
-      headers: {
-        "Content-Type": file.content_type,
-        "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(file.filename)}`,
-        "Cache-Control": "private, no-store",
-        "Content-Security-Policy": "default-src 'none'; sandbox",
-      },
-    });
+    return privateFileResponse(c.req.raw, c.env.DOCUMENTS, file, true);
   });
   app.get("/projects/:project/requests", async (c) => {
     const s = c.get("store"),

@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+import { userError } from "../errors";
 import { useState, useEffect, useRef } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../client";
@@ -29,6 +31,7 @@ export function useReview(
   enabled: boolean,
   collaboration?: { pointId?: string; canAnnotate: boolean },
 ) {
+  const { t } = useTranslation();
   const [selectedAnnotations, setSelectedAnnotations] = useState<string[]>([]);
   const [saved, setSaved] = useState(false);
   const activeRevision = useRef(revision.id);
@@ -80,7 +83,7 @@ export function useReview(
       setSaved(true);
       return result;
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(userError(e, t));
       throw e;
     } finally {
       setSaving(false);

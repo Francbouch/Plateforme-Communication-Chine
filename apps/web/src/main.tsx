@@ -1,8 +1,5 @@
-import {
-  CollaborativeWorkspace,
-  AcceptInvitation,
-  logout,
-} from "./access/CollaborativeWorkspace";
+import { SessionNotice } from "./access/SessionNotice";
+import { logout } from "./access/session";
 import React, { useEffect, useState, lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, NavLink, Routes, Route } from "react-router";
@@ -46,6 +43,16 @@ import { Projects } from "./pages/Projects";
 import { Admin } from "./pages/Admin";
 import "./i18n";
 import "./style.css";
+const CollaborativeWorkspace = lazy(() =>
+  import("./access/CollaborativeWorkspace").then((m) => ({
+    default: m.CollaborativeWorkspace,
+  })),
+);
+const AcceptInvitation = lazy(() =>
+  import("./access/CollaborativeWorkspace").then((m) => ({
+    default: m.AcceptInvitation,
+  })),
+);
 function App() {
   const { t, i18n } = useTranslation();
   const [invitationToken] = useState(() => {
@@ -116,9 +123,17 @@ function App() {
     enabled: !!org && account.data?.is_primary_admin !== false,
   });
   if (invitationToken && !isDemo)
-    return <AcceptInvitation token={invitationToken} />;
+    return (
+      <Suspense fallback={<p role="status">{t("loading")}</p>}>
+        <AcceptInvitation token={invitationToken} />
+      </Suspense>
+    );
   if (account.data?.is_primary_admin === false && !isDemo)
-    return <CollaborativeWorkspace actor={account.data.profile} />;
+    return (
+      <Suspense fallback={<p role="status">{t("loading")}</p>}>
+        <CollaborativeWorkspace actor={account.data.profile} />
+      </Suspense>
+    );
   const nav = [
     ["dashboard", LayoutDashboard, "/"],
     ["projects", FolderKanban, "/projects"],
@@ -379,6 +394,7 @@ createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <QueryClientProvider client={qc}>
       <BrowserRouter basename={isDemo ? "/demo" : "/"}>
+        <SessionNotice />
         <App />
       </BrowserRouter>
     </QueryClientProvider>

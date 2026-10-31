@@ -538,5 +538,13 @@
   "selectSupplier": "Choose supplier",
   "selectDocument": "Choose document",
   "access_request_assignee": "Request assignee",
-  "access_assign_request": "Assign request"
+  "access_assign_request": "Assign request",
+  "sessionExpired": "Your session has expired. Your draft remains visible; copy it before signing in again.",
+  "sessionReconnect": "Sign in again",
+  "permissionChanged": "This resource is unavailable or your permissions have changed.",
+  "requestConflict": "This data has changed. Refresh before trying again.",
+  "requestTooLarge": "The file or request exceeds the allowed size.",
+  "requestRateLimited": "Too many requests. Wait before trying again.",
+  "offlineError": "Connection interrupted. Check your network and try again.",
+  "requestFailed": "The operation failed. Your changes are not confirmed. Try again."
 }

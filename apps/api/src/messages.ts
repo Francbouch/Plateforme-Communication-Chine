@@ -1,3 +1,4 @@
+import { privateFileResponse } from "./private-file";
 import { Hono } from "hono";
 import { z } from "zod";
 import { Store } from "./database";
@@ -698,23 +699,8 @@ export function communicationRoutes() {
     return c.json({ cancelled: true });
   });
   app.get("/api/v1/message-attachments/:id/content", async (c) => {
-    const { a } = await attachment(c.get("store"), c.req.param("id")),
-      b = bucket(c.env);
-    const object = await b.get(a.object_key);
-    if (!object) throw new HttpError(404, "Attachment missing from storage");
-    const preview =
-      ["pdf", "png", "jpg", "jpeg", "webp"].includes(a.extension) &&
-      c.req.query("download") !== "1";
-    return new Response(object.body, {
-      headers: {
-        "Content-Type": a.content_type,
-        "Content-Length": String(a.size),
-        "Cache-Control": "private, no-store",
-        "X-Content-Type-Options": "nosniff",
-        "Content-Security-Policy": "default-src 'none'; sandbox",
-        "Content-Disposition": `${preview ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(a.filename)}`,
-      },
-    });
+    const { a } = await attachment(c.get("store"), c.req.param("id"));
+    return privateFileResponse(c.req.raw, c.env.DOCUMENTS, a);
   });
   app.post("/api/v1/messages/:id/requests", async (c) => {
     const s = c.get("store"),

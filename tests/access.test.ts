@@ -1396,3 +1396,32 @@ it("keeps internal glossary terms and their cached translations private from ext
     ).status,
   ).toBe(409);
 });
+it("serves exact authorized supplier byte ranges and rejects every old range URL after sharing withdrawal", async () => {
+  const f = await drawing(),
+    actor = await enroll(
+      "range@example.test",
+      "supplier_engineer",
+      await supplier("Range"),
+    );
+  await share(f);
+  const path = `collaboration/revisions/${f.revision}/content`;
+  const r = await req(path, undefined, "GET", {
+    "Cf-Access-Jwt-Assertion": actor.session,
+    Range: "bytes=0-7",
+  });
+  expect(r.status).toBe(206);
+  expect(r.headers.get("Content-Length")).toBe("8");
+  expect(new Uint8Array(await r.arrayBuffer())).toEqual(f.bytes.slice(0, 8));
+  await share(f, false, []);
+  expect(
+    (
+      await req(path, undefined, "GET", {
+        "Cf-Access-Jwt-Assertion": actor.session,
+        Range: "bytes=0-7",
+      })
+    ).status,
+  ).toBe(404);
+  expect(
+    new Uint8Array(await (await storage.get(f.key))!.arrayBuffer()),
+  ).toEqual(f.bytes);
+});
