@@ -26,11 +26,17 @@ INSERT INTO review_events(id,item_id,actor_id,action,payload) VALUES('event','dr
     runner.run('execute', 'forgebridge-db', '--local', '--file', str(fixture), *runner.persist_args)
     assert runner.inspect() == ([f.name for f in files[2:4]], [f.name for f in files[4:]])
     migrate(runner, apply=True)
+    # Backup coverage for the additive native identity bridge, without touching industrial data.
+    runner.query("UPDATE profiles SET email='backup@example.test' WHERE id='sentinel'")
+    runner.query("INSERT INTO email_auth_user(id,name,email,emailVerified,createdAt,updatedAt) VALUES('auth-sentinel','Preserved','backup@example.test',1,'2026-11-13T00:00:00.000Z','2026-11-13T00:00:00.000Z')")
+    runner.query("INSERT INTO email_auth_enrollments(email,profile_id,approved_by) VALUES('backup@example.test','sentinel','sentinel')")
+    runner.query("INSERT INTO email_auth_links(auth_user_id,profile_id,email) VALUES('auth-sentinel','sentinel','backup@example.test')")
     expected = {
         'SELECT id,name FROM profiles': [{'id': 'sentinel', 'name': 'Preserved'}],
         'SELECT id,object_key FROM document_revisions': [{'id': 'rev', 'object_key': 'private/object/unchanged'}],
         'SELECT id,body FROM review_messages': [{'id': 'message', 'body': 'Preserved discussion'}],
         'SELECT id FROM review_events': [{'id': 'event'}],
+        'SELECT auth_user_id,profile_id FROM email_auth_links': [{'auth_user_id': 'auth-sentinel', 'profile_id': 'sentinel'}],
         'SELECT id,is_point,title FROM review_items': [{'id': 'drawing', 'is_point': 1, 'title': 'Legacy technical point'}],
         'SELECT id,point_id FROM graphical_annotations': [{'id': 'drawing', 'point_id': 'drawing'}],
     }
@@ -80,5 +86,12 @@ INSERT INTO review_events(id,item_id,actor_id,action,payload) VALUES('event','dr
         assert 'revisions are immutable' in error.stdout, error.stdout
     else:
         raise AssertionError('Restored immutable revision protection was lost')
+    try:
+        restored.query("UPDATE email_auth_links SET profile_id='sentinel' WHERE auth_user_id='auth-sentinel'")
+    except Exception as error:
+        assert isinstance(error, subprocess.CalledProcessError), error
+        assert 'Reviewed identity links are immutable' in error.stdout, error.stdout
+    else:
+        raise AssertionError('Restored identity bridge protection was lost')
     print('Local backup restored into a separate D1; data, ledger, triggers, integrity verified. SHA-256:', backup_hash)
     print('Integration passed: manual 0004 recognized, only pending migrations applied (0005 and later), backfill/data/protections preserved, rerun unchanged.')

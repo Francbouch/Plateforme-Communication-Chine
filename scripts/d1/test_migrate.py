@@ -131,5 +131,31 @@ class SecurityGateTests(unittest.TestCase):
         self.assertTrue(runner.done)
 
 
+class EmailAuthGateTests(unittest.TestCase):
+    class Remote:
+        target = '--remote'
+        def __init__(self):
+            self.writes = []
+        def inspect(self):
+            return [], ['0010_email_auth.sql']
+        def query(self, sql):
+            self.writes.append(sql)
+        def run(self, *args):
+            self.writes.append(args)
+
+    def test_unreviewed_email_auth_migration_never_writes(self):
+        runner = self.Remote()
+        with patch.dict('os.environ', {}, clear=True):
+            with self.assertRaisesRegex(ValueError, 'No writes performed'):
+                migrate(runner, apply=True)
+        self.assertEqual(runner.writes, [])
+
+    def test_inspection_needs_no_email_auth_approval(self):
+        runner = self.Remote()
+        with patch.dict('os.environ', {}, clear=True):
+            migrate(runner, apply=False)
+        self.assertEqual(runner.writes, [])
+
+
 if __name__ == '__main__':
     unittest.main()

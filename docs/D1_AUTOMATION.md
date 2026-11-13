@@ -121,3 +121,14 @@ référencent : préparer une copie avec `scripts/d1/prepare_restore.py`, sans m
 le brut ni désactiver les contraintes. Voir la [procédure et les limites](PHASE8_STABILIZATION.md).
 Une sauvegarde D1 ne sauvegarde pas les octets R2. Aucun exercice ne doit restaurer
 la production pour faire un test.
+
+## Authentification par courriel (0010)
+
+La migration additive 0010 et les conditions d’activation/récupération sont décrites
+dans [EMAIL_AUTH.md](EMAIL_AUTH.md). Le runner distant refuse toute écriture si cette migration est en attente sans
+`EMAIL_AUTH_SECURITY_REVIEWED=true` et `EMAIL_AUTH_BACKUP_PROOF` (SHA-256 du manifeste
+privé vérifié). Renseigner ces variables GitHub après sauvegarde/restauration et revue,
+pas pour contourner le contrôle. Les mêmes preuves côté Worker gardent l’activation.
+Conserver le mode natif désactivé pendant la migration ; la fusion et le déploiement
+ne remplacent ni le rattachement explicite de l’ancien UUID administrateur ni
+la validation de l’application Access indépendante de récupération.

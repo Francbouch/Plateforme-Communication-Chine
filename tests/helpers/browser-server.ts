@@ -27,7 +27,30 @@ const token = await new SignJWT({ email: "browser@example.test", type: "app" })
   .setIssuedAt()
   .setExpirationTime("10m")
   .sign(keys.privateKey);
+const nativeEmail = process.env.TEST_EMAIL_AUTH === "1";
+const recoveryToken = await new SignJWT({
+  email: "browser@example.test",
+  type: "app",
+})
+  .setProtectedHeader({ alg: "RS256", kid: "browser-test" })
+  .setIssuer(issuer)
+  .setAudience("browser-recovery")
+  .setSubject("isolated-browser-subject")
+  .setIssuedAt()
+  .setExpirationTime("10m")
+  .sign(keys.privateKey);
 const env: Bindings = {
+  ...(nativeEmail
+    ? {
+        EMAIL_AUTH_ENABLED: "staging",
+        RECOVERY_ACCESS_AUD: "browser-recovery",
+        BETTER_AUTH_SECRET: "test-fixture-only-secret-" + "e".repeat(48),
+        AUTH_FROM: "auth@example.test",
+        RESEND_API_KEY: "test-fixture-only",
+        EMAIL_AUTH_SECURITY_REVIEWED: "true",
+        EMAIL_AUTH_BACKUP_PROOF: "a".repeat(64),
+      }
+    : {}),
   APP_ORIGIN: "http://127.0.0.1:4191",
   ACCESS_ISSUER: issuer,
   ACCESS_AUD: "browser-test",
@@ -74,12 +97,13 @@ const upstream: typeof fetch = async (input, init) => {
 };
 const bundled = await build({
   stdin: {
-    contents: `import {createApp} from './apps/api/src/index';import {AccessIdentityProvider} from './apps/api/src/identity';import {createLocalJWKSet} from 'jose';const provider=new AccessIdentityProvider(createLocalJWKSet({keys:[${JSON.stringify({ ...publicKey, kid: "browser-test", alg: "RS256" })}]}));import {DeepLFreeProvider} from './apps/api/src/translation/provider';import {simulatedDeepLFetch} from './tests/helpers/translation-provider';export default createApp(provider,fetch,env=>new DeepLFreeProvider(env.DEEPL_API_KEY,simulatedDeepLFetch));`,
+    contents: `import {createApp} from './apps/api/src/index';import {AccessIdentityProvider} from './apps/api/src/identity';import {createLocalJWKSet} from 'jose';const provider=new AccessIdentityProvider(createLocalJWKSet({keys:[${JSON.stringify({ ...publicKey, kid: "browser-test", alg: "RS256" })}]}));import {DeepLFreeProvider} from './apps/api/src/translation/provider';import {simulatedDeepLFetch} from './tests/helpers/translation-provider';const messages=new Map();const app=createApp(provider,fetch,env=>new DeepLFreeProvider(env.DEEPL_API_KEY,simulatedDeepLFetch),async(url,init)=>{if(String(url)!=='https://api.resend.com/emails')throw new Error('Unexpected email destination');const msg=JSON.parse(init.body);messages.set(msg.to[0],msg.text);return Response.json({id:'simulated-not-delivered'});});export default {fetch(req,env,ctx){const url=new URL(req.url);if(url.pathname==='/__fixture/mail')return Response.json({text:messages.get(url.searchParams.get('email'))});return app.fetch(req,env,ctx);}};`,
     resolveDir: process.cwd(),
   },
   bundle: true,
   format: "esm",
   platform: "browser",
+  external: ["node:*"],
   target: "es2022",
   write: false,
 });
@@ -88,6 +112,7 @@ const runtime = new Miniflare(
     modules: true,
     script: bundled.outputFiles[0].text,
     compatibilityDate: "2026-10-29",
+    compatibilityFlags: ["nodejs_compat"],
     resourcePersistencePath: folder,
     d1Databases: { DB: "forgebridge-browser" },
     r2Buckets: { DOCUMENTS: "forgebridge-browser-files" },
@@ -111,6 +136,14 @@ const server = createServer(async (req, res) => {
   try {
     const chunks: Buffer[] = [];
     for await (const chunk of req) chunks.push(Buffer.from(chunk));
+    if (nativeEmail && req.url?.startsWith("/__test__/mail?")) {
+      const response = await runtime.dispatchFetch(
+        "http://127.0.0.1:4191/__fixture/mail?" + req.url.split("?")[1],
+      );
+      res.writeHead(response.status, { "Content-Type": "application/json" });
+      res.end(await response.text());
+      return;
+    }
     if (req.url === "/__test__/auth" && req.method === "POST") {
       const v = JSON.parse(Buffer.concat(chunks).toString()) as {
         actor: string;
@@ -159,7 +192,13 @@ const server = createServer(async (req, res) => {
     )?.[1];
     const assertion = sessionId ? sessions.get(sessionId) : token;
     headers.delete("Cf-Access-Jwt-Assertion");
-    if (assertion) headers.set("Cf-Access-Jwt-Assertion", assertion);
+    if (assertion)
+      headers.set(
+        "Cf-Access-Jwt-Assertion",
+        nativeEmail && req.url?.startsWith("/recovery") && assertion === token
+          ? recoveryToken
+          : assertion,
+      );
     for (const name of [
       "host",
       "connection",
@@ -178,7 +217,12 @@ const server = createServer(async (req, res) => {
     const response = req.url?.startsWith("/api/")
       ? await runtime.dispatchFetch(url, options)
       : await app.request(url, options, env);
-    res.writeHead(response.status, Object.fromEntries(response.headers));
+    const outgoing: Record<string, string | string[]> = Object.fromEntries(
+      response.headers,
+    );
+    const cookies = response.headers.getSetCookie();
+    if (cookies.length) outgoing["set-cookie"] = cookies;
+    res.writeHead(response.status, outgoing);
     if (response.body)
       Readable.fromWeb(
         response.body as import("node:stream/web").ReadableStream,

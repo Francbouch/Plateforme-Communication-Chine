@@ -41,6 +41,7 @@ beforeAll(async () => {
     bundle: true,
     format: "esm",
     platform: "browser",
+    external: ["node:*"],
     target: "es2022",
     write: false,
   });
@@ -75,6 +76,7 @@ function makeRuntime() {
       modules: true,
       script,
       compatibilityDate: "2026-10-29",
+      compatibilityFlags: ["nodejs_compat"],
       d1Databases: { DB: "approval-test" },
       r2Buckets: { DOCUMENTS: "approval-files" },
       bindings: {

@@ -1,3 +1,4 @@
+import { EmailLogin } from "./access/EmailLogin";
 import { SessionNotice } from "./access/SessionNotice";
 import { logout } from "./access/session";
 import React, { useEffect, useState, lazy, Suspense } from "react";
@@ -80,6 +81,15 @@ function App() {
     document.documentElement.dataset.theme = dark ? "dark" : "light";
     localStorage.setItem("forgebridge.theme", dark ? "dark" : "light");
   }, [dark]);
+  const nativeConfig = useQuery({
+    queryKey: ["email-auth", "config"],
+    queryFn: async () => {
+      const r = await fetch("/api/auth/config", { credentials: "same-origin" });
+      if (!r.ok) return { enabled: false };
+      return r.json() as Promise<{ enabled: boolean }>;
+    },
+    enabled: !isDemo,
+  });
   const account = useQuery({
     queryKey: ["me"],
     queryFn: () => api<Account>("me"),
@@ -122,6 +132,23 @@ function App() {
     queryFn: () => api<Project[]>(`projects?organization_id=${org}`),
     enabled: !!org && account.data?.is_primary_admin !== false,
   });
+  if (
+    !isDemo &&
+    nativeConfig.data?.enabled &&
+    (window.location.pathname === "/login" ||
+      (account.isError && !account.data))
+  )
+    return (
+      <EmailLogin
+        onSignedIn={async () => {
+          const result = await account.refetch();
+          if (result.data) {
+            if (window.location.pathname === "/login")
+              window.location.assign("/");
+          }
+        }}
+      />
+    );
   if (invitationToken && !isDemo)
     return (
       <Suspense fallback={<p role="status">{t("loading")}</p>}>

@@ -24,7 +24,7 @@ export async function api<T>(
     response.status === 401 ||
     (response.ok && response.headers.get("Content-Type")?.includes("text/html"))
   ) {
-    if (typeof window !== "undefined")
+    if (typeof window !== "undefined" && path !== "me")
       window.dispatchEvent(new Event("forgebridge:session-expired"));
   }
   if (!response.headers.get("Content-Type")?.includes("application/json"))

@@ -60,6 +60,8 @@ jobs:
       - name: Inspect, reconcile manual migrations and apply pending migrations
         run: python3 scripts/d1/migrate.py --remote --apply
         env:
+          EMAIL_AUTH_SECURITY_REVIEWED: ${{ vars.EMAIL_AUTH_SECURITY_REVIEWED }}
+          EMAIL_AUTH_BACKUP_PROOF: ${{ vars.EMAIL_AUTH_BACKUP_PROOF }}
           PHASE7_SECURITY_REVIEWED: ${{ vars.PHASE7_SECURITY_REVIEWED }}
           PHASE7_BACKUP_PROOF: ${{ vars.PHASE7_BACKUP_PROOF }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
