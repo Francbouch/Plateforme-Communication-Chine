@@ -112,6 +112,11 @@ test("project conversations persist, reply, edit, rename, archive, isolate and s
     .getByRole("textbox", { name: "Modifier le message", exact: true })
     .fill("Support approuvé pour le prototype renforcé.");
   await card.getByRole("button", { name: "Enregistrer", exact: true }).click();
+  // The edited text is already present in the textarea while saving. Wait for
+  // the editor to close before opening another form with an Enregistrer button.
+  await expect(
+    card.getByRole("textbox", { name: "Modifier le message", exact: true }),
+  ).toHaveCount(0);
   await expect(card).toContainText(
     "Support approuvé pour le prototype renforcé.",
   );
