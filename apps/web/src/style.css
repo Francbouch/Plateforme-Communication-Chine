@@ -1412,3 +1412,91 @@ label.button:focus-within {
   border-bottom: 2px solid var(--line);
   background: var(--surface);
 }
+
+.pdf-translation-controls {
+  max-width: 100%;
+}
+.pdf-translation-panel {
+  width: min(42rem, 90vw);
+  padding: 0.75rem;
+  border: 1px solid var(--border, #dce2eb);
+}
+.pdf-translation-panel label {
+  display: block;
+  margin: 0.5rem 0;
+}
+.pdf-translation-panel input[type="checkbox"] {
+  width: auto;
+  margin-right: 0.5rem;
+}
+.pdf-note-list {
+  max-height: 15rem;
+  overflow: auto;
+  padding-left: 1.8rem;
+}
+.pdf-note-list p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.pdf-translation-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+}
+.pdf-note {
+  position: absolute;
+  transform-origin: left bottom;
+  border: 0;
+  border-bottom: 1px dotted #004ea8;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  color: #004ea8;
+  font: 13px sans-serif;
+  white-space: nowrap;
+  text-shadow: 0 0 2px white;
+  min-height: 0;
+}
+.pdf-note.active {
+  color: #a12d00;
+  border-bottom-color: #a12d00;
+}
+
+.pdf-translation-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.pdf-translation-layout > .review-layout {
+  flex: 1;
+  min-width: 0;
+}
+.pdf-translation-host:empty {
+  display: none;
+}
+.pdf-translation-host {
+  flex: 0 0 320px;
+  min-width: 0;
+  max-height: 70dvh;
+  overflow: auto;
+  position: sticky;
+  top: 0;
+}
+.pdf-translation-host .pdf-translation-panel {
+  width: 100%;
+  box-sizing: border-box;
+}
+@media (max-width: 900px) {
+  .pdf-translation-layout {
+    flex-direction: column;
+  }
+  .pdf-translation-layout > .review-layout {
+    width: 100%;
+  }
+  .pdf-translation-host {
+    flex: auto;
+    width: 100%;
+    position: static;
+  }
+}

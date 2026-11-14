@@ -106,7 +106,7 @@ export async function sourceText(s: Store, ref: TranslationSource) {
     external: "external" in p && p.external === true,
   };
 }
-async function relevantGlossary(
+export async function relevantGlossary(
   s: Store,
   src: { text: string; organization_id: string; external: boolean },
 ) {
@@ -122,7 +122,7 @@ async function relevantGlossary(
     throw new HttpError(400, "translation_too_many_terms");
   return glossary;
 }
-function glossaryFingerprint(glossary: GlossaryEntry[]) {
+export function glossaryFingerprint(glossary: GlossaryEntry[]) {
   return hash(
     JSON.stringify(
       glossary.map((g) => [g.id, g.version, g.fr, g.en, g["zh-CN"]]),
@@ -175,7 +175,11 @@ async function result(
     cached,
   };
 }
-function limit(value: string | undefined, fallback: number, max: number) {
+export function limit(
+  value: string | undefined,
+  fallback: number,
+  max: number,
+) {
   const n = Number(value);
   return Number.isInteger(n) && n > 0 ? Math.min(n, max) : fallback;
 }

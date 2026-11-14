@@ -132,3 +132,12 @@ pas pour contourner le contrôle. Les mêmes preuves côté Worker gardent l’a
 Conserver le mode natif désactivé pendant la migration ; la fusion et le déploiement
 ne remplacent ni le rattachement explicite de l’ancien UUID administrateur ni
 la validation de l’application Access indépendante de récupération.
+
+## Couche de traduction PDF (0011)
+
+La migration 0011 est additive : extraction, traductions, propositions/décisions
+et décalages personnels sont séparés des documents, des révisions et des objets
+R2. La procédure et les limites sont décrites dans [PDF_TRANSLATION.md](PDF_TRANSLATION.md).
+Le scénario d’intégration local vérifie aussi leur sauvegarde/restauration et
+l’immutabilité des corrections. Les gardes de 0009 et 0010 restent applicables ;
+la configuration par courriel peut rester désactivée pendant cette préparation.
