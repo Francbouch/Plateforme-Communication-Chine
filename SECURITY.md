@@ -1,4 +1,17 @@
-# Sécurité — mode développeur privé
+# Sécurité ForgeBridge
+
+## Connexion native optionnelle
+
+La connexion par code courriel Better Auth/D1 est préparée derrière une activation
+explicite et une récupération Cloudflare Access indépendante. Voir
+[EMAIL_AUTH.md](docs/EMAIL_AUTH.md) pour les quotas, secrets, rattachements
+non destructifs et étapes obligatoires avant ouverture. Sans activation, le mode
+Access décrit ci-dessous reste en place. Avec activation, la page de connexion
+et les assets génériques deviennent accessibles ; les API métier et fichiers
+R2 restent privés et soumis aux mêmes permissions. Ne pas retirer la protection
+Access de `/recovery*`.
+
+## Mode Access historique
 
 ## Défense en profondeur
 
@@ -8,7 +21,7 @@
 4. Vercel applique `middleware.ts` à tous les chemins et exige `ORIGIN_SHARED_SECRET` (au moins 32 octets aléatoires encodés base64url). Une comparaison des empreintes de taille fixe évite la comparaison naïve. Ce secret n’est connu que du Worker et de l’environnement serveur Vercel, jamais du bundle, d’une URL ou du navigateur. Le middleware refuse 503 s’il manque et 403 si la preuve est absente/fausse.
 5. Le Worker ne conserve pas de réponse dans un cache public, ne transmet pas les cookies/JWT Access vers Vercel, ne suit pas les redirects avec le secret et retire les cookies de réponse. Il impose une CSP same-origin ; aucun service tiers ni ancienne connexion Supabase n’est nécessaire.
 
-`workers_dev:false` et `preview_urls:false` limitent les alias d’accès ; toute route oubliée reste soumise à la validation JWT. Protéger tous les alias Vercel avec le middleware et vérifier ces refus à distance avant de charger des données confidentielles. La configuration locale n’établit pas que Cloudflare Access est actif en production.
+`preview_urls:false` limite les alias de prévisualisation ; l’alias workers.dev actuellement utilisé doit conserver les mêmes protections serveur et la politique Access applicable. Toute API privée reste soumise à la validation serveur de l’identité. Protéger tous les alias Vercel avec le middleware et vérifier ces refus à distance avant de charger des données confidentielles. La configuration locale n’établit pas que Cloudflare Access est actif en production.
 
 ## Autorisations et persistance
 
@@ -26,6 +39,6 @@ Pour un changement légitime de sujet Access, sauvegarder puis modifier explicit
 
 Configurer Time Travel D1 selon l’offre et vérifier la rétention disponible. Exporter périodiquement la base et stocker l’export de manière chiffrée avec accès restreint. Tester une restauration dans une **nouvelle base de récupération**, vérifier FK, comptes, permissions et audit avant toute bascule décidée. Ne pas restaurer sur une base d’un autre projet. Les sauvegardes SQL ne sauvegardent pas R2 : prévoir un manifeste et une copie indépendante des objets, avec vérification SHA-256. RPO/RTO à convenir avant usage réel.
 
-## Fichiers futurs
+## Fichiers et révisions
 
-R2 privé par binding uniquement, pas de r2.dev ou de domaine public. Clés opaques scoped et actifs immuables, uploads en quarantaine, vérification de signature réelle, taille/checksum et antivirus avant diffusion. Aucun endpoint de fichier n’est activé dans cette migration ; le pipeline documentaire reste à construire. Ne jamais exécuter de CAO non fiable, et isoler les transformations PDF avec ressources limitées.
+R2 privé par binding uniquement, pas de r2.dev ou de domaine public. Clés opaques, révisions immuables, contrôles de taille et checksum, diffusion autorisée par projet et partage de révision exacte. Les endpoints documentaires existants sont protégés aussi pour les sessions natives ; le partage de B ne donne pas C. La présence de ces contrôles ne constitue pas une analyse antivirus des fichiers. Ne jamais exécuter de CAO non fiable, et isoler les transformations PDF avec ressources limitées.

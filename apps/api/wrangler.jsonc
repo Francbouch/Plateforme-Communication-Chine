@@ -3,6 +3,7 @@
   "name": "forgebridge-api",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-29",
+  "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
   // Preserve dashboard-managed Access/admin variables across Git deployments.
   "keep_vars": true,

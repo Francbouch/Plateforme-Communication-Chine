@@ -9,7 +9,8 @@
     "db:migrate": "wrangler d1 migrations apply forgebridge-db --local"
   },
   "dependencies": {
-    "hono": "^4.10.6",
+    "better-auth": "1.7.23",
+    "hono": "^4.13.18",
     "jose": "^6.2.14",
     "zod": "^4.1.13"
   }

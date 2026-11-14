@@ -1,5 +1,6 @@
+import { EmailSessions } from "./EmailAuthManager";
 import { ProjectMembers } from "./ProjectMembers";
-import { useState, lazy, Suspense } from "react";
+import { useState, useRef, lazy, Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { api } from "../client";
@@ -58,6 +59,15 @@ export function CollaborativeWorkspace({
     staleTime: 0,
     refetchInterval: 30000,
   });
+  const nativeConfig = useQuery({
+    queryKey: ["email-auth", "config"],
+    queryFn: async () => {
+      const r = await fetch("/api/auth/config");
+      return r.ok
+        ? (r.json() as Promise<{ enabled: boolean }>)
+        : { enabled: false };
+    },
+  });
   const current =
     projects.data?.find((p) => p.id === project) ?? projects.data?.[0];
   return (
@@ -93,6 +103,7 @@ export function CollaborativeWorkspace({
       </header>
       <main>
         <h1>{t("access_my_workspace")}</h1>
+        {nativeConfig.data?.enabled && <EmailSessions />}
         <label>
           {t("project")}
           <select
@@ -402,17 +413,26 @@ function TextForm({
     [text, setText] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  const pending = useRef(false);
   return (
     <form
       className="access-text-form"
       onSubmit={(e) => {
         e.preventDefault();
+        if (pending.current || !text.trim()) return;
+        pending.current = true;
+        const submitted = text;
         setBusy(true);
         setError("");
-        void submit(text)
-          .then(() => setText(""))
+        void submit(submitted)
+          .then(() =>
+            setText((current) => (current === submitted ? "" : current)),
+          )
           .catch(() => setError(t("access_failed")))
-          .finally(() => setBusy(false));
+          .finally(() => {
+            pending.current = false;
+            setBusy(false);
+          });
       }}
     >
       <label>

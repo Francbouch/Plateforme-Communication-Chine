@@ -1,3 +1,4 @@
+import { emailPrincipal } from "./email-accounts";
 import { resolveMemberIdentity } from "./access-identity";
 import type { Permission } from "../../../packages/shared/src/access";
 import { z } from "zod";
@@ -36,6 +37,7 @@ export async function resolvePrincipal(
 ): Promise<Principal> {
   if (!env.ADMIN_EMAIL || !z.uuid().safeParse(env.ADMIN_USER_ID).success)
     throw new HttpError(503, "Administrator configuration required");
+  if (identity.provider === "better-auth") return emailPrincipal(env, identity);
   const member = await resolveMemberIdentity(db, identity, env);
   if (member) return member;
   if (identity.email !== env.ADMIN_EMAIL.trim().toLowerCase())

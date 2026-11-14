@@ -33,6 +33,7 @@ export async function createDatabase(persist?: string) {
       modules: true,
       script: 'export default {fetch(){return new Response("test harness")}}',
       compatibilityDate: "2026-10-29",
+      compatibilityFlags: ["nodejs_compat"],
       d1Databases: { DB: "forgebridge-integration" },
       r2Buckets: { DOCUMENTS: "forgebridge-integration-files" },
       ...(persist ? { resourcePersistencePath: persist } : {}),

@@ -1,3 +1,5 @@
+import { emailLogout } from "./email-http";
+import { approveEmailEnrollment, emailStatus } from "./email-management";
 import { Hono } from "hono";
 import { z } from "zod";
 import { Store } from "./database";
@@ -69,7 +71,58 @@ export function accessRoutes(fetcher: typeof fetch = fetch) {
       ),
       security(s, null, "session.logout", s.userId),
     ]);
+    if (i.provider === "better-auth")
+      return emailLogout(c.req.raw, c.env, fetcher);
     return c.json({ logout_url: "/cdn-cgi/access/logout" });
+  });
+  app.get("/email-auth/status", async (c) => {
+    if (c.get("principal").id !== c.env.ADMIN_USER_ID) throw unavailable();
+    return c.json(await emailStatus(c.get("store")));
+  });
+  app.post("/email-auth/enrollments", async (c) => {
+    const v = valid(
+      z.object({ user_id: z.uuid(), email: z.email().max(254).optional() }),
+      await c.req.json().catch(() => null),
+    );
+    return c.json(
+      await approveEmailEnrollment(
+        c.env,
+        c.get("principal"),
+        v.user_id,
+        v.email,
+      ),
+    );
+  });
+  app.get("/email-auth/sessions", async (c) => {
+    const s = c.get("store");
+    return c.json({
+      items: await s.all(
+        "SELECT s.id,s.createdAt,s.expiresAt,s.userAgent FROM email_auth_session s JOIN email_auth_links l ON l.auth_user_id=s.userId WHERE l.profile_id=? AND s.expiresAt>? ORDER BY s.createdAt DESC LIMIT 50",
+        s.userId,
+        new Date().toISOString(),
+      ),
+    });
+  });
+  app.post("/email-auth/sessions/:id/revoke", async (c) => {
+    const s = c.get("store"),
+      id = valid(
+        z
+          .string()
+          .min(10)
+          .max(128)
+          .regex(/^[a-zA-Z0-9_-]+$/),
+        c.req.param("id"),
+      );
+    const result = await s
+      .statement(
+        "DELETE FROM email_auth_session WHERE id=? AND userId IN(SELECT auth_user_id FROM email_auth_links WHERE profile_id=?)",
+        id,
+        s.userId,
+      )
+      .run();
+    if (!result.meta.changes) throw unavailable();
+    await security(s, null, "session.revoked", s.userId).run();
+    return c.json({ ok: true });
   });
   app.get("/projects/:project/members", async (c) => {
     const s = c.get("store"),
@@ -283,7 +336,7 @@ export function accessRoutes(fetcher: typeof fetch = fetch) {
     if (
       c.env.MULTIUSER_ENABLED === "true" &&
       c.env.RESEND_API_KEY &&
-      c.env.INVITATION_FROM
+      (c.env.INVITATION_FROM || c.env.AUTH_FROM)
     ) {
       delivery = "failed";
       try {
@@ -295,7 +348,7 @@ export function accessRoutes(fetcher: typeof fetch = fetch) {
             "Idempotency-Key": id,
           },
           body: JSON.stringify({
-            from: c.env.INVITATION_FROM,
+            from: c.env.INVITATION_FROM || c.env.AUTH_FROM,
             to: [v.email],
             subject: "ForgeBridge — invitation",
             text: `${v.message}\n\nForgeBridge: ${link}\nExpires: ${expires}\nSign in with ${v.email}.`,
@@ -353,7 +406,7 @@ export function accessRoutes(fetcher: typeof fetch = fetch) {
     if (
       c.env.MULTIUSER_ENABLED === "true" &&
       c.env.RESEND_API_KEY &&
-      c.env.INVITATION_FROM
+      (c.env.INVITATION_FROM || c.env.AUTH_FROM)
     ) {
       delivery = "failed";
       try {
@@ -365,7 +418,7 @@ export function accessRoutes(fetcher: typeof fetch = fetch) {
             "Idempotency-Key": crypto.randomUUID(),
           },
           body: JSON.stringify({
-            from: c.env.INVITATION_FROM,
+            from: c.env.INVITATION_FROM || c.env.AUTH_FROM,
             to: [invite.email],
             subject: "ForgeBridge — invitation",
             text: `${invite.message}\n\n${link}\nExpires: ${expires}`,

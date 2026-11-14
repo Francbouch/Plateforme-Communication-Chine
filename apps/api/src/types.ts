@@ -1,4 +1,9 @@
 export interface Bindings {
+  EMAIL_AUTH_ENABLED?: string;
+  BETTER_AUTH_SECRET?: string;
+  AUTH_FROM?: string;
+  EMAIL_AUTH_SECURITY_REVIEWED?: string;
+  EMAIL_AUTH_BACKUP_PROOF?: string;
   MULTIUSER_ENABLED?: string;
   RESEND_API_KEY?: string;
   INVITATION_FROM?: string;
@@ -12,6 +17,7 @@ export interface Bindings {
   APP_ORIGIN?: string;
   ACCESS_ISSUER?: string;
   ACCESS_AUD?: string;
+  RECOVERY_ACCESS_AUD?: string;
   ADMIN_EMAIL?: string;
   ADMIN_USER_ID?: string;
   ADMIN_NAME?: string;
@@ -22,7 +28,7 @@ export interface Bindings {
   };
 }
 export interface Identity {
-  provider: "cloudflare-access";
+  provider: "cloudflare-access" | "better-auth";
   issuer: string;
   subject: string;
   email: string;

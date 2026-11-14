@@ -1,3 +1,10 @@
+import {
+  emailAuthConfigured,
+  emailAuthEnabled,
+  emailAuthRequest,
+  nativeIdentity,
+} from "./email-http";
+import { emailRecovery } from "./email-recovery";
 import { accessRoutes } from "./access-routes";
 import { collaborationRoutes, authorizeMemberRequest } from "./collaboration";
 import type { TranslationProvider } from "./translation/provider";
@@ -30,7 +37,13 @@ export function createApp(
   invitationFetcher?: typeof fetch,
 ) {
   const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
-  app.use("*", secureHeaders());
+  const normalHeaders = secureHeaders(),
+    recoveryHeaders = secureHeaders({ referrerPolicy: "same-origin" });
+  app.use("*", (c, next) =>
+    (c.req.path === "/recovery" || c.req.path.startsWith("/recovery/")
+      ? recoveryHeaders
+      : normalHeaders)(c, next),
+  );
   app.use("*", async (c, next) => {
     c.set("requestId", crypto.randomUUID());
     c.header("X-Request-ID", c.get("requestId"));
@@ -108,8 +121,34 @@ export function createApp(
     );
   });
   app.use("*", async (c, next) => {
+    if (c.req.path === "/api/auth" || c.req.path.startsWith("/api/auth/"))
+      return emailAuthRequest(c.req.raw, c.env, invitationFetcher ?? fetch);
+    if (c.req.path === "/recovery" || c.req.path.startsWith("/recovery/"))
+      return emailRecovery(c.req.raw, c.env, identityProvider);
+    if (
+      emailAuthConfigured(c.env) &&
+      (await emailAuthEnabled(c.env)) &&
+      !c.req.path.startsWith("/api/") &&
+      ["GET", "HEAD"].includes(c.req.method)
+    )
+      return serveFrontend(c.req.raw, c.env, fetcher);
+    await next();
+  });
+  app.use("*", async (c, next) => {
     // No public health/assets route, no development bypass and no browser admin ID.
-    const identity = await identityProvider.verify(c.req.raw, c.env);
+    let identity;
+    if (
+      emailAuthConfigured(c.env) &&
+      (await emailAuthEnabled(c.env)) &&
+      c.req.header("Cookie")?.includes("forgebridge.session_token=")
+    ) {
+      identity = await nativeIdentity(
+        c.req.raw,
+        c.env,
+        invitationFetcher ?? fetch,
+      );
+      if (!identity) throw new HttpError(401, "Session expired");
+    } else identity = await identityProvider.verify(c.req.raw, c.env);
     if (!c.env.DB) throw new HttpError(503, "D1 binding required");
     if (!c.env.APP_ORIGIN)
       throw new HttpError(503, "Private origin configuration required");
@@ -154,6 +193,15 @@ export function createApp(
           "INSERT INTO security_events(id,actor_id,action,resource_id) SELECT ?,?,'session.authenticated',? WHERE changes()>0",
         ).bind(crypto.randomUUID(), principal.id, principal.id),
       ]);
+    }
+    if (
+      identity.provider === "better-auth" &&
+      principal.id === c.env.ADMIN_USER_ID &&
+      c.req.path === "/api/v1/me"
+    ) {
+      await c.env.DB.prepare(
+        "UPDATE email_auth_control SET admin_verified_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=1 AND admin_verified_at IS NULL",
+      ).run();
     }
     c.set("principal", principal);
     const store = new Store(c.env.DB, principal.id, identity);

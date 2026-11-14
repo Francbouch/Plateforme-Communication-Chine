@@ -1,3 +1,4 @@
+import { EmailAuthManager } from "../access/EmailAuthManager";
 import { userError } from "../errors";
 import { AccessManager } from "../access/AccessManager";
 import { Glossary } from "../translations/Glossary";
@@ -71,6 +72,7 @@ export function Admin({
       {collaborative && (
         <AccessManager key={`access-${org}`} org={org} projects={projects} />
       )}
+      <EmailAuthManager admin={profile.id} />
       <Glossary key={org} org={org} />
       <section className="panel">
         <h2>{t("createOrganization")}</h2>
