@@ -31,7 +31,13 @@ INSERT INTO review_events(id,item_id,actor_id,action,payload) VALUES('event','dr
     runner.query("INSERT INTO email_auth_user(id,name,email,emailVerified,createdAt,updatedAt) VALUES('auth-sentinel','Preserved','backup@example.test',1,'2026-11-13T00:00:00.000Z','2026-11-13T00:00:00.000Z')")
     runner.query("INSERT INTO email_auth_enrollments(email,profile_id,approved_by) VALUES('backup@example.test','sentinel','sentinel')")
     runner.query("INSERT INTO email_auth_links(auth_user_id,profile_id,email) VALUES('auth-sentinel','sentinel','backup@example.test')")
+    # Preserve the new PDF layer and its append-only approval history through restore.
+    runner.query("INSERT INTO pdf_text_segments(id,revision_id,page,original,geometry,extraction_version,created_by) VALUES('pdf-segment','rev',1,'REMOVE SHARP EDGES','{}','pdfjs-notes-v1','sentinel')")
+    runner.query("INSERT INTO pdf_translations(id,segment_id,audience,source_language,target_language,provider,glossary_hash,cache_key,machine,warnings,created_by) VALUES('pdf-translation','pdf-segment','internal','en','zh-CN','test-only','glossary','pdf-cache','去除锐边','[]','sentinel')")
+    runner.query("INSERT INTO pdf_translation_corrections(id,translation_id,body,version,author_id,verified) VALUES('pdf-correction','pdf-translation','清除锐边',1,'sentinel',1)")
     expected = {
+        'SELECT id,machine FROM pdf_translations': [{'id':'pdf-translation','machine':'去除锐边'}],
+        'SELECT id,body FROM pdf_translation_corrections': [{'id':'pdf-correction','body':'清除锐边'}],
         'SELECT id,name FROM profiles': [{'id': 'sentinel', 'name': 'Preserved'}],
         'SELECT id,object_key FROM document_revisions': [{'id': 'rev', 'object_key': 'private/object/unchanged'}],
         'SELECT id,body FROM review_messages': [{'id': 'message', 'body': 'Preserved discussion'}],
@@ -93,5 +99,12 @@ INSERT INTO review_events(id,item_id,actor_id,action,payload) VALUES('event','dr
         assert 'Reviewed identity links are immutable' in error.stdout, error.stdout
     else:
         raise AssertionError('Restored identity bridge protection was lost')
+    try:
+        restored.query("UPDATE pdf_translation_corrections SET body='overwrite' WHERE id='pdf-correction'")
+    except Exception as error:
+        assert isinstance(error, subprocess.CalledProcessError), error
+        assert 'PDF correction history is immutable' in error.stdout, error.stdout
+    else:
+        raise AssertionError('Restored PDF correction protection was lost')
     print('Local backup restored into a separate D1; data, ledger, triggers, integrity verified. SHA-256:', backup_hash)
     print('Integration passed: manual 0004 recognized, only pending migrations applied (0005 and later), backfill/data/protections preserved, rerun unchanged.')

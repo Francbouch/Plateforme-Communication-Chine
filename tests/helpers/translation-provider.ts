@@ -15,6 +15,20 @@ export const simulatedDeepLFetch: typeof fetch = async (input, init) => {
   if (text.includes("providerquota"))
     return new Response("quota", { status: 456 });
   const dictionary: Record<string, [string, string, string]> = {
+    "REMOVE SHARP EDGES": [
+      "REMOVE SHARP EDGES",
+      "去除锐边",
+      "ENLEVER LES ARÊTES",
+    ],
+    "GENERAL NOTES": ["GENERAL NOTES", "一般注释", "NOTES GÉNÉRALES"],
+    MATERIAL: ["MATERIAL", "材料", "MATIÈRE"],
+    "SURFACE FINISH": ["SURFACE FINISH", "表面处理", "FINITION DE SURFACE"],
+    "Enlever les arêtes": [
+      "REMOVE SHARP EDGES",
+      "去除锐边",
+      "Enlever les arêtes",
+    ],
+
     "Veuillez augmenter l'épaisseur de cette pièce à": [
       "Please increase this part thickness to",
       "请将此零件厚度增加至",

@@ -1,7 +1,7 @@
 import type { GlossaryEntry } from "../../../../packages/shared/src/translations";
 // Longest alternatives first: preserve complete engineering expressions, then every number.
 const criticalPattern =
-  /(?:\b(?:ISO|AISI|ASTM|DIN|EN|ANSI|JIS)\s*[-\w.]+|\bM\d+(?:[.,]\d+)?\s*[×x]\s*\d+(?:[.,]\d+)?|\b(?:Révision|Revision|Rev\.)\s+[A-Z0-9.-]+|\b[A-Z][A-Z0-9]*[-_][A-Z0-9._-]+|\b[A-Z]{1,12}\d+[A-Z0-9._-]*\b|[±+−-]?\d+(?:[.,]\d+)?(?:\s*(?:mm|cm|µm|μm|nm|m²|m³|m|kg|mg|g|N·m|Nm|MPa|kPa|Pa|bar|psi|°C|°F|°|%|V|A|W|Hz)(?![\p{L}\p{N}_]))?)/gu;
+  /(?:(?<![\p{L}\p{N}_])[\p{L}\p{N}_.-]+\.(?:pdf|PDF|dwg|DWG|dxf|DXF|sldprt|SLDPRT|sldasm|SLDASM)\b|\b(?=[A-Za-z0-9._-]*\d)[A-Za-z][A-Za-z0-9]*[-_][A-Za-z0-9._-]+|[Ø⌀]\s*[+−-]?\d+(?:[.,]\d+)?|\b\d+\/\d+(?:-\d+\s*(?:UNC|UNF))?["″]?|(?<![\p{L}\p{N}_])(?:mm|cm|µm|μm|MPa|kPa|psi|Ra|Rz)(?![\p{L}\p{N}_])|\b(?:ISO|AISI|ASTM|DIN|EN|ANSI|JIS)\s*[-\w.]+|\bM\d+(?:[.,]\d+)?\s*[×x]\s*\d+(?:[.,]\d+)?|\b(?:Révision|Revision|Rev\.)\s+[A-Z0-9.-]+|\b[A-Z][A-Z0-9]*[-_][A-Z0-9._-]+|\b[A-Z]{1,12}\d+[A-Z0-9._-]*\b|[±+−-]?\d+(?:[.,]\d+)?(?:\s*(?:mm|cm|µm|μm|nm|m²|m³|m|kg|mg|g|N·m|Nm|MPa|kPa|Pa|bar|psi|°C|°F|°|%|V|A|W|Hz)(?![\p{L}\p{N}_]))?|[±⌀Ø⟂∥⌖⌭⌰⌒⏤⏥⏦⌓⏊]|[+−-](?=\s*\d))/gu;
 export function critical(text: string) {
   return text.match(criticalPattern) ?? [];
 }
