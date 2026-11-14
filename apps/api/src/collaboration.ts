@@ -272,6 +272,14 @@ export async function authorizeMemberRequest(c: C): Promise<void> {
   if (["me", "health", "translations/config"].includes(path)) return;
   if (path.startsWith("access/") || path.startsWith("collaboration/")) return; // Each handler authorizes its own organization/resource.
   if (
+    (method === "POST" &&
+      /^revisions\/[a-f0-9-]+\/pdf-(?:text|translate)$/.test(path)) ||
+    (method === "GET" &&
+      /^pdf-translations\/[a-f0-9-]+\/history$/.test(path)) ||
+    (method === "POST" &&
+      /^pdf-translations\/[a-f0-9-]+\/(?:corrections|reviews|position)$/.test(
+        path,
+      )) ||
     path === "translations" ||
     /^translations\/[a-f0-9-]+$/.test(path) ||
     (method === "GET" && /^organizations\/[a-f0-9-]+\/glossary$/.test(path))

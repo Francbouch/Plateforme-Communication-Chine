@@ -1,3 +1,4 @@
+import { pdfTranslationRoutes } from "./pdf-translations";
 import {
   emailAuthConfigured,
   emailAuthEnabled,
@@ -400,6 +401,7 @@ export function createApp(
   app.route("/", communicationRoutes());
   app.route("/", approvalRoutes());
   app.route("/api/v1", translationRoutes(translationProviderFactory));
+  app.route("/api/v1", pdfTranslationRoutes(translationProviderFactory));
   app.all("/api/*", () => {
     throw new HttpError(404, "Not found");
   });

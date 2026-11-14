@@ -1,3 +1,4 @@
+import { PdfTranslation } from "../pdf-translation/PdfTranslation";
 import { useEffect, useRef, useState } from "react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -45,6 +46,8 @@ function RevisionViewer({
     previewSource?.url ??
     contentUrl ??
     `/api/v1/revisions/${revision.id}/content`;
+  const [translationPanel, setTranslationPanel] =
+    useState<HTMLDivElement | null>(null);
   const pageContainer = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null),
     container = useRef<HTMLDivElement>(null);
@@ -312,6 +315,17 @@ function RevisionViewer({
             )}
           </>
         )}
+        {revision.extension === "pdf" && !previewSource && (
+          <PdfTranslation
+            pdf={pdf}
+            revision={revision}
+            page={page}
+            space={space}
+            sheet={canvas.current?.parentElement ?? null}
+            selectTool={tool === "select"}
+            panelHost={translationPanel}
+          />
+        )}
         <a
           className="button"
           download={previewSource ? revision.filename : undefined}
@@ -396,70 +410,73 @@ function RevisionViewer({
           )}
         </>
       )}
-      <div
-        className={
-          reviewEnabled && session.panel && !collaboration
-            ? "review-layout"
-            : "review-layout expanded"
-        }
-      >
-        <div className="viewer-content" ref={pageContainer}>
-          {revision.extension === "pdf" ? (
-            <>
-              <div
-                className="pdf-sheet"
-                style={{ width: space?.width, height: space?.height }}
-              >
-                <canvas ref={canvas} />
-                {reviewEnabled && space && (
-                  <AnnotationLayer
-                    key={`${revision.id}-${page}`}
-                    space={space}
-                    page={page}
-                    tool={tool}
-                    color={color}
-                    session={
-                      collaboration && !collaboration.canAnnotate
-                        ? { ...session, saving: true }
-                        : session
-                    }
-                    canEdit={
-                      collaboration
-                        ? (item) => item.created_by === collaboration.actorId
-                        : undefined
-                    }
-                    onDrawn={() => setTool("select")}
-                  />
-                )}
-              </div>
-              {!pdf && !error && <p>{t("loading")}</p>}
-            </>
-          ) : image ? (
-            <img
-              alt={revision.filename}
-              src={url}
-              style={{
-                width: fit === "width" ? `${zoom * 100}%` : undefined,
-                maxHeight: fit === "page" ? 650 : undefined,
-                transform: fit === "page" ? `scale(${zoom})` : undefined,
-              }}
-              onError={() => setError("fileOpenError")}
+      <div className="pdf-translation-layout">
+        <div
+          className={
+            reviewEnabled && session.panel && !collaboration
+              ? "review-layout"
+              : "review-layout expanded"
+          }
+        >
+          <div className="viewer-content" ref={pageContainer}>
+            {revision.extension === "pdf" ? (
+              <>
+                <div
+                  className="pdf-sheet"
+                  style={{ width: space?.width, height: space?.height }}
+                >
+                  <canvas ref={canvas} />
+                  {reviewEnabled && space && (
+                    <AnnotationLayer
+                      key={`${revision.id}-${page}`}
+                      space={space}
+                      page={page}
+                      tool={tool}
+                      color={color}
+                      session={
+                        collaboration && !collaboration.canAnnotate
+                          ? { ...session, saving: true }
+                          : session
+                      }
+                      canEdit={
+                        collaboration
+                          ? (item) => item.created_by === collaboration.actorId
+                          : undefined
+                      }
+                      onDrawn={() => setTool("select")}
+                    />
+                  )}
+                </div>
+                {!pdf && !error && <p>{t("loading")}</p>}
+              </>
+            ) : image ? (
+              <img
+                alt={revision.filename}
+                src={url}
+                style={{
+                  width: fit === "width" ? `${zoom * 100}%` : undefined,
+                  maxHeight: fit === "page" ? 650 : undefined,
+                  transform: fit === "page" ? `scale(${zoom})` : undefined,
+                }}
+                onError={() => setError("fileOpenError")}
+              />
+            ) : (
+              <p>
+                {t("technicalDownloadOnly")} · {revision.filename}
+              </p>
+            )}
+          </div>
+          {reviewEnabled && session.panel && !collaboration && (
+            <ReviewPanel
+              session={session}
+              revision={revision}
+              currentPage={page}
+              pageCount={pdf?.numPages ?? 1}
+              onNavigate={navigate}
             />
-          ) : (
-            <p>
-              {t("technicalDownloadOnly")} · {revision.filename}
-            </p>
           )}
         </div>
-        {reviewEnabled && session.panel && !collaboration && (
-          <ReviewPanel
-            session={session}
-            revision={revision}
-            currentPage={page}
-            pageCount={pdf?.numPages ?? 1}
-            onNavigate={navigate}
-          />
-        )}
+        <div className="pdf-translation-host" ref={setTranslationPanel} />
       </div>
     </div>
   );
